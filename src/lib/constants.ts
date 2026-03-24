@@ -3,6 +3,7 @@ import type { InterviewSession, SetupFormData } from "@/types/interview";
 export const STORAGE_KEYS = {
   setupForm: "frontend-interview-copilot.setup-form",
   interviewSession: "frontend-interview-copilot.interview-session",
+  interviewReport: "frontend-interview-copilot.interview-report",
 } as const;
 
 export const SETUP_FORM_LIMITS = {

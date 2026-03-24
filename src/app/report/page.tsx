@@ -1,23 +1,46 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { PageContainer } from "@/components/shared/page-container";
 import { PageHeader } from "@/components/shared/page-header";
-import { generateMockInterviewReport, MOCK_INTERVIEW_QUESTIONS } from "@/lib/mock";
+import { MOCK_INTERVIEW_QUESTIONS } from "@/lib/mock";
 import {
   clearInterviewSession,
+  clearInterviewReport,
   clearSetupForm,
+  readInterviewReport,
   readInterviewSession,
   readSetupForm,
+  saveInterviewReport,
 } from "@/lib/storage";
 import { validateSetupForm } from "@/lib/validation";
+import type { InterviewReport } from "@/types/interview";
+
+type GenerateReportErrorResponse = {
+  message?: string;
+};
+
+function getGenerateReportErrorMessage(value: unknown) {
+  if (
+    value &&
+    typeof value === "object" &&
+    "message" in value &&
+    typeof value.message === "string"
+  ) {
+    return value.message;
+  }
+
+  return "生成报告失败，请稍后重试。";
+}
 
 export default function ReportPage() {
   const router = useRouter();
-  const setupForm = readSetupForm();
-  const interviewSession = readInterviewSession();
+  const hasTriggeredGeneration = useRef(false);
+  const setupForm = useMemo(() => readSetupForm(), []);
+  const interviewSession = useMemo(() => readInterviewSession(), []);
   const hasValidSetup = validateSetupForm(setupForm).isValid;
   const questionCount =
     interviewSession.questions.length > 0
@@ -35,12 +58,75 @@ export default function ReportPage() {
     interviewSession.questions.length > 0 ||
     interviewSession.answers.length > 0;
   const hasRequiredData = hasValidSetup && hasInterviewData;
+  const [report, setReport] = useState<InterviewReport | null>(() =>
+    readInterviewReport(),
+  );
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [reportError, setReportError] = useState("");
 
   function handleRestart() {
     clearSetupForm();
     clearInterviewSession();
+    clearInterviewReport();
     router.push("/setup");
   }
+
+  async function generateReport() {
+    if (!hasRequiredData) {
+      return;
+    }
+
+    try {
+      setIsGeneratingReport(true);
+      setReportError("");
+
+      const response = await fetch("/api/generate-report", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          jd: setupForm.jd,
+          resume: setupForm.resume,
+          questions:
+            interviewSession.questions.length > 0
+              ? interviewSession.questions
+              : MOCK_INTERVIEW_QUESTIONS,
+          answers: interviewSession.answers,
+        }),
+      });
+      const result = (await response.json()) as
+        | InterviewReport
+        | GenerateReportErrorResponse;
+
+      if (!response.ok) {
+        throw new Error(getGenerateReportErrorMessage(result));
+      }
+
+      const nextReport = result as InterviewReport;
+      setReport(nextReport);
+      saveInterviewReport(nextReport);
+    } catch (error) {
+      setReportError(
+        error instanceof Error ? error.message : "生成报告失败，请稍后重试。",
+      );
+    } finally {
+      setIsGeneratingReport(false);
+    }
+  }
+
+  const handleAutoGenerateReport = useEffectEvent(() => {
+    void generateReport();
+  });
+
+  useEffect(() => {
+    if (!hasRequiredData || report || hasTriggeredGeneration.current) {
+      return;
+    }
+
+    hasTriggeredGeneration.current = true;
+    handleAutoGenerateReport();
+  }, [hasRequiredData, report]);
 
   if (!hasRequiredData) {
     return (
@@ -70,32 +156,78 @@ export default function ReportPage() {
     );
   }
 
-  const report = generateMockInterviewReport(interviewSession, setupForm);
   const reportSections = [
     {
-      title: "总结",
-      content: report.summary,
-    },
-    {
       title: "优势",
-      items: report.strengths,
+      items: report?.strengths ?? [],
     },
     {
       title: "薄弱点",
-      items: report.weaknesses,
+      items: report?.weaknesses ?? [],
     },
     {
       title: "建议",
-      items: report.suggestions,
+      items: report?.suggestions ?? [],
     },
   ];
+
+  if (isGeneratingReport && !report) {
+    return (
+      <PageContainer className="flex items-center">
+        <section className="mx-auto flex w-full max-w-2xl flex-col gap-6 rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
+          <PageHeader
+            title="正在生成复盘报告"
+            description="系统正在基于岗位信息和整轮面试回答生成真实 AI 报告，请稍候。"
+          />
+          <div className="rounded-2xl bg-zinc-50 px-5 py-4 text-sm text-zinc-600">
+            正在生成报告...
+          </div>
+        </section>
+      </PageContainer>
+    );
+  }
+
+  if (!report) {
+    return (
+      <PageContainer className="flex items-center">
+        <section className="mx-auto flex w-full max-w-2xl flex-col gap-6 rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
+          <PageHeader
+            title="报告生成失败"
+            description="这次没有成功拿到 AI 报告，你可以重试一次，当前面试数据仍然保留。"
+          />
+          <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-600">
+            {reportError || "生成报告失败，请稍后重试。"}
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <button
+              type="button"
+              onClick={() => {
+                hasTriggeredGeneration.current = true;
+                void generateReport();
+              }}
+              className="inline-flex items-center justify-center rounded-xl bg-zinc-900 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-zinc-700"
+            >
+              重试生成
+            </button>
+            <button
+              type="button"
+              onClick={handleRestart}
+              className="inline-flex items-center justify-center rounded-xl border border-zinc-200 px-5 py-3 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50"
+            >
+              重新开始
+            </button>
+          </div>
+        </section>
+      </PageContainer>
+    );
+  }
 
   return (
     <PageContainer>
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
         <PageHeader
           title="面试复盘报告"
-          description="这是一份基于本地 setup 数据和 mock 面试过程生成的模拟复盘报告，当前不会调用 AI。"
+          description="这是一份基于岗位信息和整轮问答生成的真实 AI 复盘报告，内容会优先读取本地缓存。"
         />
 
         <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
@@ -133,6 +265,11 @@ export default function ReportPage() {
           </div>
         </section>
 
+        <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <h2 className="text-base font-semibold text-zinc-900">总结</h2>
+          <p className="mt-3 text-sm leading-7 text-zinc-600">{report.summary}</p>
+        </section>
+
         <section className="grid gap-4 md:grid-cols-2">
           {reportSections.map((section) => (
             <article
@@ -142,24 +279,30 @@ export default function ReportPage() {
               <h2 className="text-base font-semibold text-zinc-900">
                 {section.title}
               </h2>
-              {"content" in section ? (
-                <p className="mt-3 text-sm leading-7 text-zinc-600">
-                  {section.content}
-                </p>
-              ) : (
-                <ul className="mt-3 space-y-3 text-sm leading-7 text-zinc-600">
-                  {section.items.map((item) => (
-                    <li key={item} className="rounded-2xl bg-zinc-50 px-4 py-3">
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <ul className="mt-3 space-y-3 text-sm leading-7 text-zinc-600">
+                {section.items.map((item) => (
+                  <li key={item} className="rounded-2xl bg-zinc-50 px-4 py-3">
+                    {item}
+                  </li>
+                ))}
+              </ul>
             </article>
           ))}
         </section>
 
-        <section className="flex justify-end">
+        <section className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            onClick={() => {
+              clearInterviewReport();
+              setReport(null);
+              hasTriggeredGeneration.current = true;
+              void generateReport();
+            }}
+            className="inline-flex items-center justify-center rounded-xl border border-zinc-200 px-5 py-3 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50"
+          >
+            重新生成报告
+          </button>
           <button
             type="button"
             onClick={handleRestart}

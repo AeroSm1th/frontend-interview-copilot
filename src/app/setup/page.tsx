@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { SETUP_FORM_LIMITS } from "@/lib/constants";
 import {
   clearInterviewSession,
+  clearInterviewReport,
   readSetupForm,
   saveInterviewSession,
   saveSetupForm,
@@ -109,6 +110,7 @@ export default function SetupPage() {
     try {
       setIsGeneratingQuestions(true);
       clearInterviewSession();
+      clearInterviewReport();
 
       const response = await fetch("/api/generate-questions", {
         method: "POST",

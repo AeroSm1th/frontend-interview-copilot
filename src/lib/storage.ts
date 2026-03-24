@@ -6,6 +6,7 @@ import {
 import type {
   InterviewAnswer,
   InterviewQuestion,
+  InterviewReport,
   InterviewSession,
   SetupFormData,
 } from "@/types/interview";
@@ -68,6 +69,25 @@ function isInterviewSession(value: unknown): value is InterviewSession {
   }
 
   return true;
+}
+
+function isInterviewReport(value: unknown): value is InterviewReport {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const data = value as Record<string, unknown>;
+
+  return (
+    typeof data.score === "number" &&
+    typeof data.summary === "string" &&
+    Array.isArray(data.strengths) &&
+    data.strengths.every((item) => typeof item === "string") &&
+    Array.isArray(data.weaknesses) &&
+    data.weaknesses.every((item) => typeof item === "string") &&
+    Array.isArray(data.suggestions) &&
+    data.suggestions.every((item) => typeof item === "string")
+  );
 }
 
 function normalizeLegacyInterviewSession(value: unknown): InterviewSession | null {
@@ -197,4 +217,47 @@ export function clearInterviewSession() {
   }
 
   window.localStorage.removeItem(STORAGE_KEYS.interviewSession);
+}
+
+export function readInterviewReport(): InterviewReport | null {
+  if (!isBrowser()) {
+    return null;
+  }
+
+  const rawValue = window.localStorage.getItem(STORAGE_KEYS.interviewReport);
+
+  if (!rawValue) {
+    return null;
+  }
+
+  try {
+    const parsedValue: unknown = JSON.parse(rawValue);
+
+    if (isInterviewReport(parsedValue)) {
+      return parsedValue;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+export function saveInterviewReport(values: InterviewReport) {
+  if (!isBrowser()) {
+    return;
+  }
+
+  window.localStorage.setItem(
+    STORAGE_KEYS.interviewReport,
+    JSON.stringify(values),
+  );
+}
+
+export function clearInterviewReport() {
+  if (!isBrowser()) {
+    return;
+  }
+
+  window.localStorage.removeItem(STORAGE_KEYS.interviewReport);
 }
