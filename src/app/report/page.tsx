@@ -19,15 +19,21 @@ export default function ReportPage() {
   const setupForm = readSetupForm();
   const interviewSession = readInterviewSession();
   const hasValidSetup = validateSetupForm(setupForm).isValid;
-  const answeredCount = Object.values(interviewSession.answers).filter((answer) =>
-    Boolean(answer.trim()),
+  const questionCount =
+    interviewSession.questions.length > 0
+      ? interviewSession.questions.length
+      : MOCK_INTERVIEW_QUESTIONS.length;
+  const answeredCount = interviewSession.answers.filter((item) =>
+    Boolean(item.answer.trim()),
   ).length;
-  const totalAnswerLength = Object.values(interviewSession.answers).reduce(
-    (total, answer) => total + answer.trim().length,
+  const totalAnswerLength = interviewSession.answers.reduce(
+    (total, item) => total + item.answer.trim().length,
     0,
   );
   const hasInterviewData =
-    interviewSession.currentQuestionIndex > 0 || Object.keys(interviewSession.answers).length > 0;
+    interviewSession.currentQuestionIndex > 0 ||
+    interviewSession.questions.length > 0 ||
+    interviewSession.answers.length > 0;
   const hasRequiredData = hasValidSetup && hasInterviewData;
 
   function handleRestart() {
@@ -108,7 +114,7 @@ export default function ReportPage() {
               <div className="rounded-2xl bg-zinc-50 px-4 py-3">
                 <p className="text-xs text-zinc-500">已回答题目</p>
                 <p className="mt-1 text-lg font-semibold text-zinc-900">
-                  {answeredCount} / {MOCK_INTERVIEW_QUESTIONS.length}
+                  {answeredCount} / {questionCount}
                 </p>
               </div>
               <div className="rounded-2xl bg-zinc-50 px-4 py-3">

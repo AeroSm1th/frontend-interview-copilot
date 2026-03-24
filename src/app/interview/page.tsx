@@ -20,11 +20,16 @@ export default function InterviewPage() {
   const router = useRouter();
   const setupForm = readSetupForm();
   const hasValidSetup = validateSetupForm(setupForm).isValid;
-  const maxQuestionIndex = MOCK_INTERVIEW_QUESTIONS.length - 1;
   const [session, setSession] = useState<InterviewSession>(() => {
     const savedSession = readInterviewSession();
+    const questions =
+      savedSession.questions.length > 0
+        ? savedSession.questions
+        : MOCK_INTERVIEW_QUESTIONS;
+    const maxQuestionIndex = questions.length - 1;
 
     return {
+      questions,
       currentQuestionIndex: Math.min(
         savedSession.currentQuestionIndex,
         maxQuestionIndex,
@@ -32,35 +37,58 @@ export default function InterviewPage() {
       answers: savedSession.answers,
     };
   });
+  const questions =
+    session.questions.length > 0 ? session.questions : MOCK_INTERVIEW_QUESTIONS;
+  const maxQuestionIndex = questions.length - 1;
 
   useEffect(() => {
     if (!hasValidSetup) {
       return;
     }
 
-    saveInterviewSession(session);
-  }, [hasValidSetup, session]);
+    saveInterviewSession({
+      ...session,
+      questions,
+    });
+  }, [hasValidSetup, questions, session]);
 
-  const currentQuestion = MOCK_INTERVIEW_QUESTIONS[session.currentQuestionIndex];
-  const currentAnswer = session.answers[currentQuestion.id] ?? "";
-  const progressWidth = `${((session.currentQuestionIndex + 1) / MOCK_INTERVIEW_QUESTIONS.length) * 100}%`;
-  const isLastQuestion =
-    session.currentQuestionIndex === MOCK_INTERVIEW_QUESTIONS.length - 1;
+  const currentQuestion = questions[session.currentQuestionIndex];
+  const currentAnswer =
+    session.answers.find((item) => item.questionId === currentQuestion.id)?.answer ??
+    "";
+  const progressWidth = `${((session.currentQuestionIndex + 1) / questions.length) * 100}%`;
+  const isLastQuestion = session.currentQuestionIndex === questions.length - 1;
   const answeredCount = useMemo(
     () =>
-      MOCK_INTERVIEW_QUESTIONS.filter((question) =>
-        Boolean(session.answers[question.id]?.trim()),
+      questions.filter((question) =>
+        Boolean(
+          session.answers.find((item) => item.questionId === question.id)?.answer.trim(),
+        ),
       ).length,
-    [session.answers],
+    [questions, session.answers],
   );
 
   function handleAnswerChange(value: string) {
     setSession((currentSession) => ({
       ...currentSession,
-      answers: {
-        ...currentSession.answers,
-        [currentQuestion.id]: value,
-      },
+      answers: currentSession.answers.some(
+        (item) => item.questionId === currentQuestion.id,
+      )
+        ? currentSession.answers.map((item) =>
+            item.questionId === currentQuestion.id
+              ? {
+                  ...item,
+                  answer: value,
+                }
+              : item,
+          )
+        : [
+            ...currentSession.answers,
+            {
+              questionId: currentQuestion.id,
+              answer: value,
+            },
+          ],
     }));
   }
 
@@ -124,7 +152,7 @@ export default function InterviewPage() {
               <p className="text-sm font-medium text-zinc-500">当前进度</p>
               <p className="mt-1 text-base font-semibold text-zinc-900">
                 第 {session.currentQuestionIndex + 1} 题 / 共{" "}
-                {MOCK_INTERVIEW_QUESTIONS.length} 题
+                {questions.length} 题
               </p>
             </div>
             <div className="w-36 rounded-full bg-zinc-100 p-1">
@@ -144,7 +172,7 @@ export default function InterviewPage() {
 
           <div className="flex items-center justify-between gap-4 rounded-2xl border border-zinc-100 px-4 py-3">
             <p className="text-sm text-zinc-500">
-              已完成 {answeredCount} / {MOCK_INTERVIEW_QUESTIONS.length} 题
+              已完成 {answeredCount} / {questions.length} 题
             </p>
             <p className="text-sm text-zinc-500">
               当前回答 {currentAnswer.length} 字

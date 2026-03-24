@@ -3,7 +3,12 @@ import {
   SETUP_FORM_INITIAL_VALUES,
   STORAGE_KEYS,
 } from "@/lib/constants";
-import type { InterviewSession, SetupFormData } from "@/types/interview";
+import type {
+  InterviewAnswer,
+  InterviewQuestion,
+  InterviewSession,
+  SetupFormData,
+} from "@/types/interview";
 
 function isBrowser() {
   return typeof window !== "undefined";
@@ -17,6 +22,26 @@ function isSetupFormData(value: unknown): value is SetupFormData {
   const data = value as Record<string, unknown>;
 
   return typeof data.jd === "string" && typeof data.resume === "string";
+}
+
+function isInterviewQuestion(value: unknown): value is InterviewQuestion {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const data = value as Record<string, unknown>;
+
+  return typeof data.id === "string" && typeof data.question === "string";
+}
+
+function isInterviewAnswer(value: unknown): value is InterviewAnswer {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const data = value as Record<string, unknown>;
+
+  return typeof data.questionId === "string" && typeof data.answer === "string";
 }
 
 function isInterviewSession(value: unknown): value is InterviewSession {
@@ -34,11 +59,55 @@ function isInterviewSession(value: unknown): value is InterviewSession {
     return false;
   }
 
-  if (!data.answers || typeof data.answers !== "object") {
+  if (!Array.isArray(data.questions) || !data.questions.every(isInterviewQuestion)) {
     return false;
   }
 
-  return Object.values(data.answers).every((answer) => typeof answer === "string");
+  if (!Array.isArray(data.answers) || !data.answers.every(isInterviewAnswer)) {
+    return false;
+  }
+
+  return true;
+}
+
+function normalizeLegacyInterviewSession(value: unknown): InterviewSession | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const data = value as Record<string, unknown>;
+
+  if (
+    typeof data.currentQuestionIndex !== "number" ||
+    !Number.isInteger(data.currentQuestionIndex) ||
+    data.currentQuestionIndex < 0
+  ) {
+    return null;
+  }
+
+  if (!data.answers || typeof data.answers !== "object" || Array.isArray(data.answers)) {
+    return null;
+  }
+
+  const answers = Object.entries(data.answers).reduce<InterviewAnswer[]>(
+    (result, [questionId, answer]) => {
+      if (typeof answer === "string") {
+        result.push({
+          questionId,
+          answer,
+        });
+      }
+
+      return result;
+    },
+    [],
+  );
+
+  return {
+    questions: [],
+    currentQuestionIndex: data.currentQuestionIndex,
+    answers,
+  };
 }
 
 export function readSetupForm(): SetupFormData {
@@ -97,6 +166,12 @@ export function readInterviewSession(): InterviewSession {
 
     if (isInterviewSession(parsedValue)) {
       return parsedValue;
+    }
+
+    const normalizedLegacySession = normalizeLegacyInterviewSession(parsedValue);
+
+    if (normalizedLegacySession) {
+      return normalizedLegacySession;
     }
   } catch {
     return INTERVIEW_SESSION_INITIAL_VALUES;

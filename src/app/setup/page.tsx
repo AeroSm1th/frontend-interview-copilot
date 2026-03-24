@@ -9,10 +9,29 @@ import { SETUP_FORM_LIMITS } from "@/lib/constants";
 import {
   clearInterviewSession,
   readSetupForm,
+  saveInterviewSession,
   saveSetupForm,
 } from "@/lib/storage";
 import { validateSetupForm } from "@/lib/validation";
-import type { SetupFormData, SetupFormField } from "@/types/interview";
+import type {
+  InterviewQuestion,
+  SetupFormData,
+  SetupFormField,
+} from "@/types/interview";
+
+type GenerateQuestionsSuccessResponse = {
+  questions: InterviewQuestion[];
+};
+
+type GenerateQuestionsErrorResponse = {
+  message?: string;
+};
+
+function isGenerateQuestionsSuccessResponse(
+  value: GenerateQuestionsSuccessResponse | GenerateQuestionsErrorResponse,
+): value is GenerateQuestionsSuccessResponse {
+  return Array.isArray((value as GenerateQuestionsSuccessResponse).questions);
+}
 
 export default function SetupPage() {
   const router = useRouter();
@@ -25,6 +44,8 @@ export default function SetupPage() {
     resume: false,
   });
   const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   useEffect(() => {
     if (!hasSavedDraft.current) {
@@ -38,6 +59,10 @@ export default function SetupPage() {
   const validationResult = validateSetupForm(formData);
 
   function handleChange(field: SetupFormField, value: string) {
+    if (submitError) {
+      setSubmitError("");
+    }
+
     setFormData((currentValues) => ({
       ...currentValues,
       [field]: value,
@@ -58,9 +83,10 @@ export default function SetupPage() {
     );
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setHasSubmitted(true);
+    setSubmitError("");
 
     if (!validationResult.isValid) {
       setTouchedFields({
@@ -70,8 +96,42 @@ export default function SetupPage() {
       return;
     }
 
-    clearInterviewSession();
-    router.push("/interview");
+    try {
+      setIsGeneratingQuestions(true);
+      clearInterviewSession();
+
+      const response = await fetch("/api/generate-questions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      });
+      const result = (await response.json()) as
+        | GenerateQuestionsSuccessResponse
+        | GenerateQuestionsErrorResponse;
+
+      if (!response.ok) {
+        throw new Error(result.message ?? "生成题目失败，请稍后重试。");
+      }
+
+      if (!isGenerateQuestionsSuccessResponse(result) || result.questions.length !== 5) {
+        throw new Error("生成的题目数量不正确，请稍后重试。");
+      }
+
+      saveInterviewSession({
+        questions: result.questions,
+        answers: [],
+        currentQuestionIndex: 0,
+      });
+      router.push("/interview");
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error ? error.message : "生成题目失败，请稍后重试。",
+      );
+    } finally {
+      setIsGeneratingQuestions(false);
+    }
   }
 
   return (
@@ -158,15 +218,20 @@ export default function SetupPage() {
             </div>
 
             <div className="flex flex-col gap-3 border-t border-zinc-100 pt-2 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm text-zinc-500">
-                输入内容会自动保存在当前浏览器中。
-              </p>
+              <div className="space-y-1">
+                <p className="text-sm text-zinc-500">
+                  输入内容会自动保存在当前浏览器中。
+                </p>
+                {submitError ? (
+                  <p className="text-sm text-red-600">{submitError}</p>
+                ) : null}
+              </div>
               <button
                 type="submit"
-                disabled={!validationResult.isValid}
+                disabled={!validationResult.isValid || isGeneratingQuestions}
                 className="inline-flex items-center justify-center rounded-xl bg-zinc-900 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:text-zinc-500"
               >
-                开始模拟面试
+                {isGeneratingQuestions ? "正在生成题目..." : "开始模拟面试"}
               </button>
             </div>
           </form>

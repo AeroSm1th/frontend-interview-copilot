@@ -16,6 +16,7 @@ export const SETUP_FORM_INITIAL_VALUES: SetupFormData = {
 };
 
 export const INTERVIEW_SESSION_INITIAL_VALUES: InterviewSession = {
+  questions: [],
   currentQuestionIndex: 0,
-  answers: {},
+  answers: [],
 };

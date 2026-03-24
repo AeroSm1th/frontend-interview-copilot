@@ -40,13 +40,17 @@ export function generateMockInterviewReport(
   session: InterviewSession,
   setupForm: SetupFormData,
 ): InterviewReport {
-  const answers = Object.values(session.answers);
+  const questionCount =
+    session.questions.length > 0
+      ? session.questions.length
+      : MOCK_INTERVIEW_QUESTIONS.length;
+  const answers = session.answers.map((item) => item.answer);
   const answeredCount = answers.filter((answer) => Boolean(answer.trim())).length;
   const totalAnswerLength = answers.reduce(
     (total, answer) => total + answer.trim().length,
     0,
   );
-  const unansweredCount = MOCK_INTERVIEW_QUESTIONS.length - answeredCount;
+  const unansweredCount = Math.max(questionCount - answeredCount, 0);
   const averageAnswerLength =
     answeredCount === 0 ? 0 : Math.round(totalAnswerLength / answeredCount);
   const score = clampScore(
@@ -94,7 +98,7 @@ export function generateMockInterviewReport(
     "尽量把项目经历和技术点绑定起来，用具体场景说明你的思考过程。",
     averageAnswerLength < 60
       ? "每道题至少补充到 3 个要点，避免只停留在定义层面。"
-      : "在回答较完整的基础上，继续打磨表达顺序和关键词总结。 ",
+      : "在回答较完整的基础上，继续打磨表达顺序和关键词总结。",
   ];
 
   return {
