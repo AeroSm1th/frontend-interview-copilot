@@ -33,6 +33,16 @@ function isGenerateQuestionsSuccessResponse(
   return Array.isArray((value as GenerateQuestionsSuccessResponse).questions);
 }
 
+function getGenerateQuestionsErrorMessage(
+  value: GenerateQuestionsSuccessResponse | GenerateQuestionsErrorResponse,
+) {
+  if ("message" in value && typeof value.message === "string") {
+    return value.message;
+  }
+
+  return "生成题目失败，请稍后重试。";
+}
+
 export default function SetupPage() {
   const router = useRouter();
   const hasSavedDraft = useRef(false);
@@ -112,7 +122,7 @@ export default function SetupPage() {
         | GenerateQuestionsErrorResponse;
 
       if (!response.ok) {
-        throw new Error(result.message ?? "生成题目失败，请稍后重试。");
+        throw new Error(getGenerateQuestionsErrorMessage(result));
       }
 
       if (!isGenerateQuestionsSuccessResponse(result) || result.questions.length !== 5) {
