@@ -3,6 +3,8 @@ export type InterviewQuestion = {
   question: string;
 };
 
+export type InterviewAnswerMap = Record<string, string>;
+
 export type SetupFormData = {
   jd: string;
   resume: string;
@@ -20,6 +22,11 @@ export type SetupFormValidationResult = {
 export type InterviewAnswer = {
   questionId: string;
   answer: string;
+};
+
+export type InterviewSession = {
+  currentQuestionIndex: number;
+  answers: InterviewAnswerMap;
 };
 
 export type InterviewReport = {

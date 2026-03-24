@@ -6,7 +6,11 @@ import { useRouter } from "next/navigation";
 import { PageContainer } from "@/components/shared/page-container";
 import { PageHeader } from "@/components/shared/page-header";
 import { SETUP_FORM_LIMITS } from "@/lib/constants";
-import { readSetupForm, saveSetupForm } from "@/lib/storage";
+import {
+  clearInterviewSession,
+  readSetupForm,
+  saveSetupForm,
+} from "@/lib/storage";
 import { validateSetupForm } from "@/lib/validation";
 import type { SetupFormData, SetupFormField } from "@/types/interview";
 
@@ -66,6 +70,7 @@ export default function SetupPage() {
       return;
     }
 
+    clearInterviewSession();
     router.push("/interview");
   }
 
