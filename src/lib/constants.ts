@@ -4,6 +4,8 @@ export const STORAGE_KEYS = {
   setupForm: "frontend-interview-copilot.setup-form",
   interviewSession: "frontend-interview-copilot.interview-session",
   interviewReport: "frontend-interview-copilot.interview-report",
+  resumeDraft: "frontend-interview-copilot.resume-draft",
+  resumeAnalysis: "frontend-interview-copilot.resume-analysis",
 } as const;
 
 export const SETUP_FORM_LIMITS = {

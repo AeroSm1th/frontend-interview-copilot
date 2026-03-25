@@ -3,6 +3,7 @@ import {
   SETUP_FORM_INITIAL_VALUES,
   STORAGE_KEYS,
 } from "@/lib/constants";
+import type { ResumeAnalysis } from "@/types/resume";
 import type {
   InterviewAnswer,
   InterviewQuestion,
@@ -87,6 +88,26 @@ function isInterviewReport(value: unknown): value is InterviewReport {
     data.weaknesses.every((item) => typeof item === "string") &&
     Array.isArray(data.suggestions) &&
     data.suggestions.every((item) => typeof item === "string")
+  );
+}
+
+function isResumeAnalysis(value: unknown): value is ResumeAnalysis {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const data = value as Record<string, unknown>;
+
+  return (
+    typeof data.summary === "string" &&
+    Array.isArray(data.strengths) &&
+    data.strengths.every((item) => typeof item === "string") &&
+    Array.isArray(data.risks) &&
+    data.risks.every((item) => typeof item === "string") &&
+    Array.isArray(data.suggestedImprovements) &&
+    data.suggestedImprovements.every((item) => typeof item === "string") &&
+    Array.isArray(data.keywords) &&
+    data.keywords.every((item) => typeof item === "string")
   );
 }
 
@@ -260,4 +281,73 @@ export function clearInterviewReport() {
   }
 
   window.localStorage.removeItem(STORAGE_KEYS.interviewReport);
+}
+
+export function readResumeDraft(): string {
+  if (!isBrowser()) {
+    return "";
+  }
+
+  const rawValue = window.localStorage.getItem(STORAGE_KEYS.resumeDraft);
+
+  return typeof rawValue === "string" ? rawValue : "";
+}
+
+export function saveResumeDraft(value: string) {
+  if (!isBrowser()) {
+    return;
+  }
+
+  window.localStorage.setItem(STORAGE_KEYS.resumeDraft, value);
+}
+
+export function clearResumeDraft() {
+  if (!isBrowser()) {
+    return;
+  }
+
+  window.localStorage.removeItem(STORAGE_KEYS.resumeDraft);
+}
+
+export function readResumeAnalysis(): ResumeAnalysis | null {
+  if (!isBrowser()) {
+    return null;
+  }
+
+  const rawValue = window.localStorage.getItem(STORAGE_KEYS.resumeAnalysis);
+
+  if (!rawValue) {
+    return null;
+  }
+
+  try {
+    const parsedValue: unknown = JSON.parse(rawValue);
+
+    if (isResumeAnalysis(parsedValue)) {
+      return parsedValue;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+export function saveResumeAnalysis(values: ResumeAnalysis) {
+  if (!isBrowser()) {
+    return;
+  }
+
+  window.localStorage.setItem(
+    STORAGE_KEYS.resumeAnalysis,
+    JSON.stringify(values),
+  );
+}
+
+export function clearResumeAnalysis() {
+  if (!isBrowser()) {
+    return;
+  }
+
+  window.localStorage.removeItem(STORAGE_KEYS.resumeAnalysis);
 }

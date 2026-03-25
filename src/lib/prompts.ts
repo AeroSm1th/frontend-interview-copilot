@@ -14,6 +14,10 @@ type GenerateReportPromptInput = {
   answers: InterviewAnswer[];
 };
 
+type AnalyzeResumePromptInput = {
+  resume: string;
+};
+
 export function buildGenerateQuestionsPrompts({
   jd,
   resume,
@@ -91,6 +95,40 @@ ${JSON.stringify(questions, null, 2)}
 
 用户回答：
 ${JSON.stringify(answers, null, 2)}`;
+
+  return {
+    systemPrompt,
+    userPrompt,
+  };
+}
+
+export function buildAnalyzeResumePrompts({
+  resume,
+}: AnalyzeResumePromptInput) {
+  const systemPrompt = `你是一名前端实习生和校招生求职场景下的简历分析助手。
+
+你的任务是根据用户提供的简历文本，输出一份简洁、具体、可执行的中文简历分析结果。
+
+要求：
+1. 分析视角必须以“前端实习/校招岗位”为准。
+2. 输出总结、优势、风险点、改进建议、关键词。
+3. strengths、risks、suggestedImprovements 各至少 2 条。
+4. 关键词应提炼核心技术栈、项目亮点或岗位匹配点。
+5. 结论要避免空话，尽量指出可以直接修改简历或补充表达的方向。
+6. 只返回 JSON，不要返回 markdown，不要添加额外解释。
+7. JSON 格式必须严格如下：
+{
+  "summary": "...",
+  "strengths": ["...", "..."],
+  "risks": ["...", "..."],
+  "suggestedImprovements": ["...", "..."],
+  "keywords": ["...", "..."]
+}`;
+
+  const userPrompt = `请分析下面这份简历文本，并给出结构化建议。
+
+简历文本：
+${resume}`;
 
   return {
     systemPrompt,
