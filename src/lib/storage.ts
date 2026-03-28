@@ -437,6 +437,18 @@ export function readInterviewHistory(): InterviewHistoryItem[] {
   return [];
 }
 
+export function readInterviewHistoryItemById(id: string): InterviewHistoryItem | null {
+  if (!isBrowser() || !id) {
+    return null;
+  }
+
+  try {
+    return readInterviewHistory().find((item) => item.id === id) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function saveInterviewHistory(values: InterviewHistoryItem[]) {
   if (!isBrowser()) {
     return;
