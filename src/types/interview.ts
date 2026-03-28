@@ -3,6 +3,7 @@ export type InterviewQuestion = {
   question: string;
   kind?: "main" | "follow_up";
   parentQuestionId?: string | null;
+  followUpRound?: 1 | 2 | 3;
   followUpStatus?: "pending" | "generated" | "skipped";
   followUpHint?: string | null;
 };

@@ -258,7 +258,7 @@ export default function ReportPage() {
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
         <PageHeader
           title="面试复盘报告"
-          description="这是一份基于岗位信息和整轮问答生成的真实 AI 复盘报告，内容会优先读取本地缓存。第一阶段只重构信息架构，不影响现有报告与历史能力。"
+          description="这是一份基于岗位信息和整轮问答生成的真实 AI 复盘报告；questions 中可能包含主问题及其后续 0 到 3 道连续追问，内容会优先读取本地缓存。"
         />
 
         <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
@@ -298,7 +298,7 @@ export default function ReportPage() {
                 </p>
                 <p className="mt-1 text-xs text-zinc-500">
                   {hasFollowUp
-                    ? "报告已合并评估主问题与追问表现"
+                    ? "报告已合并评估主问题与整条追问链表现"
                     : "本轮按主问题回答进行评估"}
                 </p>
               </div>

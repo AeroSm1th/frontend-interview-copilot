@@ -17,6 +17,16 @@ import {
 import { validateSetupForm } from "@/lib/validation";
 import type { InterviewQuestion, InterviewSession } from "@/types/interview";
 
+type FollowUpRound = NonNullable<InterviewQuestion["followUpRound"]>;
+
+type GenerateFollowUpQuestionChainItem = {
+  questionId: string;
+  question: string;
+  answer: string;
+  kind: "main" | "follow_up";
+  followUpRound?: FollowUpRound;
+};
+
 type GenerateFollowUpSuccessResponse = {
   followUpQuestion: InterviewQuestion | null;
 };
@@ -30,7 +40,12 @@ type FollowUpUiStatus = "idle" | "checking" | "inserted" | "none" | "failed";
 type FollowUpUiState = {
   status: FollowUpUiStatus;
   mainQuestionId: string | null;
+  nextFollowUpRound: FollowUpRound | null;
 };
+
+function isFollowUpRound(value: unknown): value is FollowUpRound {
+  return value === 1 || value === 2 || value === 3;
+}
 
 function isInterviewQuestion(value: unknown): value is InterviewQuestion {
   if (!value || typeof value !== "object") {
@@ -57,6 +72,14 @@ function isInterviewQuestion(value: unknown): value is InterviewQuestion {
     typeof data.parentQuestionId !== "undefined" &&
     data.parentQuestionId !== null &&
     typeof data.parentQuestionId !== "string"
+  ) {
+    return false;
+  }
+
+  if (
+    "followUpRound" in data &&
+    typeof data.followUpRound !== "undefined" &&
+    !isFollowUpRound(data.followUpRound)
   ) {
     return false;
   }
@@ -112,49 +135,123 @@ function getQuestionKind(question: InterviewQuestion) {
   return question.kind === "follow_up" ? "follow_up" : "main";
 }
 
+function getQuestionFollowUpRound(question: InterviewQuestion) {
+  if (getQuestionKind(question) !== "follow_up") {
+    return 0;
+  }
+
+  return isFollowUpRound(question.followUpRound) ? question.followUpRound : 1;
+}
+
 function getFollowUpStatus(question: InterviewQuestion) {
   return question.followUpStatus === "generated" || question.followUpStatus === "skipped"
     ? question.followUpStatus
     : "pending";
 }
 
+function getMainQuestionId(question: InterviewQuestion) {
+  return getQuestionKind(question) === "follow_up"
+    ? question.parentQuestionId ?? null
+    : question.id;
+}
+
+function normalizeQuestionForFollowUpStatus(question: InterviewQuestion) {
+  if (getQuestionKind(question) === "follow_up") {
+    return {
+      ...question,
+      kind: "follow_up" as const,
+      parentQuestionId: question.parentQuestionId ?? null,
+      followUpRound: getQuestionFollowUpRound(question) as FollowUpRound,
+    };
+  }
+
+  const restQuestion = { ...question };
+
+  delete restQuestion.followUpRound;
+
+  return {
+    ...restQuestion,
+    kind: "main" as const,
+    parentQuestionId: null,
+  };
+}
+
 function insertFollowUpQuestion(
   questions: InterviewQuestion[],
-  mainQuestionIndex: number,
+  currentQuestionIndex: number,
   followUpQuestion: InterviewQuestion,
 ) {
   const nextQuestions = questions
     .map((question, index) =>
-      index === mainQuestionIndex
+      index === currentQuestionIndex
         ? {
-            ...question,
-            kind: "main" as const,
-            parentQuestionId: null,
+            ...normalizeQuestionForFollowUpStatus(question),
             followUpStatus: "generated" as const,
           }
         : question,
     )
     .filter((question) => question.id !== followUpQuestion.id);
 
-  nextQuestions.splice(mainQuestionIndex + 1, 0, followUpQuestion);
+  nextQuestions.splice(currentQuestionIndex + 1, 0, followUpQuestion);
 
   return nextQuestions;
 }
 
-function markMainQuestionFollowUpSkipped(
+function markCurrentQuestionFollowUpSkipped(
   questions: InterviewQuestion[],
-  mainQuestionIndex: number,
+  currentQuestionIndex: number,
 ) {
   return questions.map((question, index) =>
-    index === mainQuestionIndex
+    index === currentQuestionIndex
       ? {
-          ...question,
-          kind: "main" as const,
-          parentQuestionId: null,
+          ...normalizeQuestionForFollowUpStatus(question),
           followUpStatus: "skipped" as const,
         }
       : question,
   );
+}
+
+function buildCurrentQuestionChain(
+  questions: InterviewQuestion[],
+  answers: InterviewSession["answers"],
+  currentQuestionIndex: number,
+): GenerateFollowUpQuestionChainItem[] {
+  const currentQuestion = questions[currentQuestionIndex];
+
+  if (!currentQuestion) {
+    return [];
+  }
+
+  const mainQuestionId = getMainQuestionId(currentQuestion);
+
+  if (!mainQuestionId) {
+    return [];
+  }
+
+  return questions
+    .slice(0, currentQuestionIndex + 1)
+    .filter((question) => {
+      if (getQuestionKind(question) === "main") {
+        return question.id === mainQuestionId;
+      }
+
+      return question.parentQuestionId === mainQuestionId;
+    })
+    .map((question) => {
+      const questionKind = getQuestionKind(question);
+
+      return {
+        questionId: question.id,
+        question: question.question,
+        answer:
+          answers.find((item) => item.questionId === question.id)?.answer.trim() ?? "",
+        kind: questionKind,
+        followUpRound:
+          questionKind === "follow_up"
+            ? (getQuestionFollowUpRound(question) as FollowUpRound)
+            : undefined,
+      };
+    });
 }
 
 export default function InterviewPage() {
@@ -182,6 +279,7 @@ export default function InterviewPage() {
   const [followUpUiState, setFollowUpUiState] = useState<FollowUpUiState>({
     status: "idle",
     mainQuestionId: null,
+    nextFollowUpRound: null,
   });
   const questions =
     session.questions.length > 0 ? session.questions : MOCK_INTERVIEW_QUESTIONS;
@@ -213,13 +311,15 @@ export default function InterviewPage() {
 
   const currentQuestion = questions[session.currentQuestionIndex];
   const currentQuestionKind = getQuestionKind(currentQuestion);
+  const currentQuestionFollowUpRound = getQuestionFollowUpRound(currentQuestion);
+  const currentMainQuestionId = getMainQuestionId(currentQuestion);
   const currentMainQuestionOrder =
     currentQuestionKind === "main"
       ? mainQuestionOrderMap.get(currentQuestion.id) ?? session.currentQuestionIndex + 1
       : null;
   const currentParentMainOrder =
-    currentQuestion.parentQuestionId != null
-      ? mainQuestionOrderMap.get(currentQuestion.parentQuestionId) ?? null
+    currentQuestionKind === "follow_up" && currentMainQuestionId != null
+      ? mainQuestionOrderMap.get(currentMainQuestionId) ?? null
       : null;
   const currentFollowUpHint =
     currentQuestionKind === "follow_up"
@@ -231,9 +331,9 @@ export default function InterviewPage() {
   const progressWidth = `${((session.currentQuestionIndex + 1) / questions.length) * 100}%`;
   const isLastQuestion = session.currentQuestionIndex === questions.length - 1;
   const shouldAttemptFollowUp =
-    currentQuestionKind === "main" &&
     currentAnswer.trim().length > 0 &&
-    getFollowUpStatus(currentQuestion) === "pending";
+    getFollowUpStatus(currentQuestion) === "pending" &&
+    currentQuestionFollowUpRound < 3;
   const answeredCount = useMemo(
     () =>
       questions.filter((question) =>
@@ -247,22 +347,26 @@ export default function InterviewPage() {
     followUpUiState.mainQuestionId != null
       ? mainQuestionOrderMap.get(followUpUiState.mainQuestionId) ?? null
       : null;
+  const followUpUiRoundLabel =
+    followUpUiState.nextFollowUpRound != null
+      ? `追问 ${followUpUiState.nextFollowUpRound}`
+      : "追问";
   const followUpUiNotice =
     followUpUiState.status === "idle"
       ? null
       : followUpUiState.status === "checking"
         ? {
-            title: "正在判断是否追加追问",
+            title: "正在判断是否继续追问",
             description: `系统正在根据主问题${
               followUpUiMainQuestionOrder != null ? ` ${followUpUiMainQuestionOrder}` : ""
-            }的回答决定是否生成 1 道追问，请稍候。`,
+            }当前这轮回答，决定是否生成${followUpUiRoundLabel}，请稍候。`,
             className:
               "rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-600",
           }
         : followUpUiState.status === "inserted"
           ? {
-              title: "已追加 1 道追问",
-              description: `这道追问来自主问题${
+              title: `已追加${followUpUiRoundLabel}`,
+              description: `这道追问仍归属于主问题${
                 followUpUiMainQuestionOrder != null
                   ? ` ${followUpUiMainQuestionOrder}`
                   : ""
@@ -272,17 +376,35 @@ export default function InterviewPage() {
             }
           : followUpUiState.status === "none"
             ? {
-                title: "本题未追加追问",
-                description: `主问题${
-                  followUpUiMainQuestionOrder != null
-                    ? ` ${followUpUiMainQuestionOrder}`
-                    : ""
-                }的回答无需继续深挖，系统已进入下一题。`,
+                title:
+                  followUpUiState.nextFollowUpRound === null
+                    ? "已达到追问上限"
+                    : followUpUiState.nextFollowUpRound === 1
+                      ? "本题未追加追问"
+                      : "当前追问链已结束",
+                description:
+                  followUpUiState.nextFollowUpRound === null
+                    ? `主问题${
+                        followUpUiMainQuestionOrder != null
+                          ? ` ${followUpUiMainQuestionOrder}`
+                          : ""
+                      }最多只支持 3 轮追问，系统已进入下一题。`
+                    : followUpUiState.nextFollowUpRound === 1
+                      ? `主问题${
+                          followUpUiMainQuestionOrder != null
+                            ? ` ${followUpUiMainQuestionOrder}`
+                            : ""
+                        }的回答无需继续深挖，系统已进入下一题。`
+                      : `主问题${
+                          followUpUiMainQuestionOrder != null
+                            ? ` ${followUpUiMainQuestionOrder}`
+                            : ""
+                        }的追问链暂不继续追加，系统已进入下一题。`,
                 className:
                   "rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-600",
               }
             : {
-                title: "追问生成失败，已继续后续流程",
+                title: "后续追问生成失败，已继续后续流程",
                 description:
                   "这次没有成功生成追问，但当前回答已经保留，系统不会阻塞后续题目与报告流程。",
                 className:
@@ -302,6 +424,7 @@ export default function InterviewPage() {
       setFollowUpUiState({
         status: "idle",
         mainQuestionId: null,
+        nextFollowUpRound: null,
       });
     }
 
@@ -350,6 +473,7 @@ export default function InterviewPage() {
     setFollowUpUiState({
       status: "idle",
       mainQuestionId: null,
+      nextFollowUpRound: null,
     });
     setSession((currentSession) => ({
       ...currentSession,
@@ -361,19 +485,11 @@ export default function InterviewPage() {
   }
 
   async function handleNextStep() {
-    if (currentQuestionKind === "follow_up") {
-      setFollowUpUiState({
-        status: "idle",
-        mainQuestionId: null,
-      });
-      moveToNextQuestionOrReport(session);
-      return;
-    }
-
     if (!currentAnswer.trim()) {
       setFollowUpUiState({
         status: "idle",
         mainQuestionId: null,
+        nextFollowUpRound: null,
       });
       moveToNextQuestionOrReport(session);
       return;
@@ -383,8 +499,62 @@ export default function InterviewPage() {
       setFollowUpUiState({
         status: "idle",
         mainQuestionId: null,
+        nextFollowUpRound: null,
       });
       moveToNextQuestionOrReport(session);
+      return;
+    }
+
+    if (currentQuestionFollowUpRound >= 3) {
+      setFollowUpUiState({
+        status: "none",
+        mainQuestionId: currentMainQuestionId,
+        nextFollowUpRound: null,
+      });
+      const nextQuestions = markCurrentQuestionFollowUpSkipped(
+        session.questions,
+        session.currentQuestionIndex,
+      );
+
+      moveToNextQuestionOrReport({
+        ...session,
+        questions: nextQuestions,
+      });
+      return;
+    }
+
+    const mainQuestionId = currentMainQuestionId;
+    const mainQuestion =
+      mainQuestionId != null
+        ? session.questions.find(
+            (question) =>
+              question.id === mainQuestionId && getQuestionKind(question) === "main",
+          ) ?? null
+        : null;
+    const questionChain = buildCurrentQuestionChain(
+      session.questions,
+      session.answers,
+      session.currentQuestionIndex,
+    );
+    const nextFollowUpRound = (
+      currentQuestionFollowUpRound + 1
+    ) as FollowUpRound;
+
+    if (!mainQuestionId || !mainQuestion || questionChain.length === 0) {
+      setFollowUpUiState({
+        status: "failed",
+        mainQuestionId,
+        nextFollowUpRound,
+      });
+      const nextQuestions = markCurrentQuestionFollowUpSkipped(
+        session.questions,
+        session.currentQuestionIndex,
+      );
+
+      moveToNextQuestionOrReport({
+        ...session,
+        questions: nextQuestions,
+      });
       return;
     }
 
@@ -392,7 +562,8 @@ export default function InterviewPage() {
       setIsGeneratingFollowUp(true);
       setFollowUpUiState({
         status: "checking",
-        mainQuestionId: currentQuestion.id,
+        mainQuestionId,
+        nextFollowUpRound,
       });
       const { reusableAnalysis, reusableJdMatch } = getReusableResumeContext({
         resume: setupForm.resume,
@@ -408,9 +579,13 @@ export default function InterviewPage() {
           jd: setupForm.jd,
           analysis: reusableAnalysis,
           jdMatch: reusableJdMatch,
-          mainQuestionId: currentQuestion.id,
-          mainQuestion: currentQuestion.question,
-          mainAnswer: currentAnswer,
+          mainQuestionId,
+          mainQuestion: mainQuestion.question,
+          currentQuestionId: currentQuestion.id,
+          currentQuestion: currentQuestion.question,
+          currentAnswer,
+          currentFollowUpRound: currentQuestionFollowUpRound,
+          questionChain,
         }),
       });
       const result = (await response.json()) as
@@ -428,7 +603,9 @@ export default function InterviewPage() {
       if (result.followUpQuestion) {
         setFollowUpUiState({
           status: "inserted",
-          mainQuestionId: currentQuestion.id,
+          mainQuestionId,
+          nextFollowUpRound:
+            result.followUpQuestion.followUpRound ?? nextFollowUpRound,
         });
         const nextQuestions = insertFollowUpQuestion(
           session.questions,
@@ -446,9 +623,10 @@ export default function InterviewPage() {
     } catch {
       setFollowUpUiState({
         status: "failed",
-        mainQuestionId: currentQuestion.id,
+        mainQuestionId,
+        nextFollowUpRound,
       });
-      const nextQuestions = markMainQuestionFollowUpSkipped(
+      const nextQuestions = markCurrentQuestionFollowUpSkipped(
         session.questions,
         session.currentQuestionIndex,
       );
@@ -464,9 +642,10 @@ export default function InterviewPage() {
 
     setFollowUpUiState({
       status: "none",
-      mainQuestionId: currentQuestion.id,
+      mainQuestionId,
+      nextFollowUpRound,
     });
-    const nextQuestions = markMainQuestionFollowUpSkipped(
+    const nextQuestions = markCurrentQuestionFollowUpSkipped(
       session.questions,
       session.currentQuestionIndex,
     );
@@ -509,7 +688,7 @@ export default function InterviewPage() {
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
         <PageHeader
           title="模拟面试"
-          description="这里会基于当前岗位与简历逐题作答；主问题回答后，系统可能追加 1 道追问，并继续进入后续复盘与历史链路。"
+          description="这里会基于当前岗位与简历逐题作答；每道主问题后系统最多会追加 3 道连续追问，并继续进入后续复盘与历史链路。"
         />
 
         <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
@@ -534,7 +713,7 @@ export default function InterviewPage() {
               {currentQuestionKind === "follow_up" ? (
                 <>
                   <span className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700">
-                    追问
+                    追问 {currentQuestionFollowUpRound}
                   </span>
                   <span className="inline-flex rounded-full bg-white px-3 py-1 text-xs font-medium text-zinc-500">
                     关联主问题 {currentParentMainOrder ?? "未知"}
@@ -551,7 +730,8 @@ export default function InterviewPage() {
             </h2>
             {currentQuestionKind === "follow_up" ? (
               <p className="mt-2 text-sm text-zinc-500">
-                这是基于你上一道主问题回答追加的补充追问。
+                这是围绕主问题 {currentParentMainOrder ?? "未知"} 的第{" "}
+                {currentQuestionFollowUpRound} 轮补充追问。
               </p>
             ) : null}
             {currentFollowUpHint ? (
@@ -568,7 +748,9 @@ export default function InterviewPage() {
             <div className="text-right text-sm text-zinc-500">
               <p>当前回答 {currentAnswer.length} 字</p>
               <p className="mt-1">
-                {currentQuestionKind === "follow_up" ? "当前题型：追问" : "当前题型：主问题"}
+                {currentQuestionKind === "follow_up"
+                  ? `当前题型：追问 ${currentQuestionFollowUpRound}`
+                  : "当前题型：主问题"}
               </p>
             </div>
           </div>
@@ -599,12 +781,12 @@ export default function InterviewPage() {
             />
             <p className="text-sm text-zinc-500">
               {currentQuestionKind === "follow_up"
-                ? "请围绕上一道主问题继续补充细节；答案会自动保存在本地浏览器中。"
+                ? "请围绕当前这条追问链继续补充细节；答案会自动保存在本地浏览器中。"
                 : "当前允许留空切换题目，答案会自动保存在本地浏览器中。"}
             </p>
             {isGeneratingFollowUp ? (
               <p className="text-sm text-zinc-500">
-                正在根据当前主问题回答判断是否需要追加追问，期间会暂时锁定输入与切题操作...
+                正在根据当前回答判断是否需要继续追加追问，期间会暂时锁定输入与切题操作...
               </p>
             ) : null}
           </div>
@@ -631,7 +813,7 @@ export default function InterviewPage() {
             className="inline-flex items-center justify-center rounded-xl bg-zinc-900 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:text-zinc-500"
           >
             {isGeneratingFollowUp
-              ? "正在判断追问..."
+              ? "正在判断是否继续追问..."
               : !shouldAttemptFollowUp && isLastQuestion
                 ? "查看报告"
                 : "下一题"}

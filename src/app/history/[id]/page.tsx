@@ -46,6 +46,18 @@ function getQuestionKind(question: InterviewQuestion) {
   return question.kind === "follow_up" ? "follow_up" : "main";
 }
 
+function getQuestionFollowUpRound(question: InterviewQuestion) {
+  if (getQuestionKind(question) !== "follow_up") {
+    return null;
+  }
+
+  return question.followUpRound === 1 ||
+    question.followUpRound === 2 ||
+    question.followUpRound === 3
+    ? question.followUpRound
+    : 1;
+}
+
 export default function HistoryDetailPage() {
   const params = useParams<{ id: string }>();
   const historyId = params.id;
@@ -235,7 +247,7 @@ export default function HistoryDetailPage() {
             <div>
               <h2 className="text-base font-semibold text-zinc-900">题目与回答</h2>
               <p className="mt-1 text-sm text-zinc-500">
-                问答明细按历史快照中的原始顺序展示，并标注主问题与追问的对应关系。
+                问答明细按历史快照中的原始顺序展示，并标注主问题归属与追问轮次。
               </p>
             </div>
             <span className="text-sm text-zinc-500">
@@ -247,6 +259,7 @@ export default function HistoryDetailPage() {
             <div className="mt-5 space-y-4">
               {historyItem.questions.map((question, index) => {
                 const questionKind = getQuestionKind(question);
+                const followUpRound = getQuestionFollowUpRound(question);
                 const mainQuestionOrder =
                   questionKind === "main"
                     ? mainQuestionOrderMap.get(question.id) ?? index + 1
@@ -278,7 +291,7 @@ export default function HistoryDetailPage() {
                       {questionKind === "follow_up" ? (
                         <>
                           <span className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700">
-                            追问
+                            追问 {followUpRound}
                           </span>
                           <span className="inline-flex rounded-full bg-white px-3 py-1 text-xs font-medium text-zinc-500">
                             关联主问题 {parentMainOrder ?? question.parentQuestionId ?? "未知"}
@@ -302,6 +315,12 @@ export default function HistoryDetailPage() {
 
                     <div className="mt-4">
                       <p className="text-sm font-medium text-zinc-900">问题</p>
+                      {questionKind === "follow_up" ? (
+                        <p className="mt-2 text-xs text-zinc-500">
+                          这是主问题 {parentMainOrder ?? question.parentQuestionId ?? "未知"} 的
+                          第 {followUpRound} 轮追问。
+                        </p>
+                      ) : null}
                       <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-zinc-700">
                         {question.question}
                       </p>

@@ -17,8 +17,19 @@ type GenerateQuestionsPromptInput = {
 type GenerateFollowUpPromptInput = {
   jd: string;
   resume: string;
+  mainQuestionId: string;
   mainQuestion: string;
-  mainAnswer: string;
+  currentQuestionId: string;
+  currentQuestion: string;
+  currentAnswer: string;
+  currentFollowUpRound: 0 | 1 | 2 | 3;
+  questionChain: {
+    questionId: string;
+    question: string;
+    answer: string;
+    kind: "main" | "follow_up";
+    followUpRound?: 1 | 2 | 3;
+  }[];
   analysis?: ResumeAnalysis | null;
   jdMatch?: ResumeJdMatch | null;
 };
@@ -104,30 +115,39 @@ ${jdMatchText}`;
 export function buildGenerateFollowUpPrompts({
   jd,
   resume,
+  mainQuestionId,
   mainQuestion,
-  mainAnswer,
+  currentQuestionId,
+  currentQuestion,
+  currentAnswer,
+  currentFollowUpRound,
+  questionChain,
   analysis,
   jdMatch,
 }: GenerateFollowUpPromptInput) {
   const analysisText = analysis ? JSON.stringify(analysis, null, 2) : "无";
   const jdMatchText = jdMatch ? JSON.stringify(jdMatch, null, 2) : "无";
+  const questionChainText =
+    questionChain.length > 0 ? JSON.stringify(questionChain, null, 2) : "[]";
 
   const systemPrompt = `你是一名负责前端实习生模拟面试的面试官。
 
-你的任务是根据当前岗位 JD、当前简历原文、当前主问题和用户对该主问题的回答，判断是否有必要追加 1 道追问。
+你的任务是根据当前岗位 JD、当前简历原文，以及“当前主问题链”的最新问答，判断是否有必要继续追加下一轮追问。
 
 要求：
-1. 追问必须只围绕当前主问题和当前回答展开，不要开启新话题。
-2. 只有当回答中存在模糊点、值得深挖的细节、明显风险点或表达不充分的地方时，才生成追问。
-3. 如果回答已经足够清晰完整，直接返回 null。
-4. 每次最多只生成 1 道追问。
-5. 追问难度应符合前端实习或校招场景，不要过难。
-6. 追问表述要简洁、自然、适合继续口头作答。
-7. 如果生成追问，同时额外给出一句很短的追问提示说明，用于页面展示。
-8. followUpHint 必须是用户可见的简短中文提示，尽量不超过 18 个字，不要解释推理过程。
-9. 如果 followUpQuestion 为 null，则 followUpHint 也必须为 null。
-10. 只返回 JSON，不要返回 markdown，不要添加额外解释。
-11. JSON 格式必须严格如下：
+1. questionChain 只包含当前主问题及其已经发生的追问链，不包含整轮面试历史，你必须基于这条链来判断是否继续深挖。
+2. 追问必须只围绕当前主问题链和当前回答展开，不要开启新话题，不要跳到其他主问题。
+3. 只有当当前回答中存在模糊点、值得深挖的细节、明显风险点或表达不充分的地方时，才生成追问。
+4. 如果当前回答已经足够清晰完整，或者继续追问价值不大，直接返回 null。
+5. 当前追问链最多只能到第 3 轮；如果当前已经是第 3 轮，必须返回 null。
+6. 每次最多只生成 1 道“下一轮追问”，不要一次生成多道。
+7. 追问难度应符合前端实习或校招场景，不要过难。
+8. 追问表述要简洁、自然、适合继续口头作答，并且应避免与 questionChain 中已有追问重复。
+9. 如果生成追问，同时额外给出一句很短的追问提示说明，用于页面展示。
+10. followUpHint 必须是用户可见的简短中文提示，尽量不超过 18 个字，不要解释推理过程。
+11. 如果 followUpQuestion 为 null，则 followUpHint 也必须为 null。
+12. 只返回 JSON，不要返回 markdown，不要添加额外解释。
+13. JSON 格式必须严格如下：
 {
   "followUpQuestion": null,
   "followUpHint": null
@@ -138,7 +158,7 @@ export function buildGenerateFollowUpPrompts({
   "followUpHint": "..."
 }`;
 
-  const userPrompt = `请基于下面信息判断是否需要生成 1 道追问。
+  const userPrompt = `请基于下面信息判断是否需要继续生成下一轮追问。
 
 当前岗位 JD：
 ${jd}
@@ -152,11 +172,26 @@ ${analysisText}
 可选的岗位匹配结果：
 ${jdMatchText}
 
+所属主问题 ID：
+${mainQuestionId}
+
 当前主问题：
 ${mainQuestion}
 
-用户对当前主问题的回答：
-${mainAnswer}`;
+当前题目 ID：
+${currentQuestionId}
+
+当前题目：
+${currentQuestion}
+
+当前题目回答：
+${currentAnswer}
+
+当前题目已处于第几轮追问：
+${currentFollowUpRound}
+
+当前主问题链（按实际发生顺序）：
+${questionChainText}`;
 
   return {
     systemPrompt,
@@ -190,7 +225,7 @@ export function buildGenerateReportPrompts({
    - 简历风险点是否在回答中暴露
    - 与岗位差距相关的薄弱点
    - 更有针对性的改进建议
-8. 当前面试题目中可能同时包含主问题和追问；如果出现追问，应结合主问题与追问的连续表现一起评估。
+8. 当前面试题目中可能同时包含主问题和 0 到 3 道连续追问；如果出现追问，应结合整条主问题链上的连续表现一起评估。
 9. 结论要具体，尽量结合回答质量、完整度、项目表达和工程实践意识。
 10. 只返回 JSON，不要返回 markdown，不要添加额外解释。
 11. JSON 格式必须严格如下：

@@ -39,6 +39,10 @@ function isInterviewQuestionKind(value: unknown) {
   return value === "main" || value === "follow_up";
 }
 
+function isFollowUpRound(value: unknown) {
+  return value === 1 || value === 2 || value === 3;
+}
+
 function isFollowUpStatus(value: unknown) {
   return value === "pending" || value === "generated" || value === "skipped";
 }
@@ -67,6 +71,14 @@ function isInterviewQuestion(value: unknown): value is InterviewQuestion {
     typeof data.parentQuestionId !== "undefined" &&
     data.parentQuestionId !== null &&
     typeof data.parentQuestionId !== "string"
+  ) {
+    return false;
+  }
+
+  if (
+    "followUpRound" in data &&
+    typeof data.followUpRound !== "undefined" &&
+    !isFollowUpRound(data.followUpRound)
   ) {
     return false;
   }

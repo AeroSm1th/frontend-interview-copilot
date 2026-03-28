@@ -6,12 +6,24 @@ import { validateSetupForm } from "@/lib/validation";
 import type { InterviewQuestion, SetupFormData } from "@/types/interview";
 import type { ResumeAnalysis, ResumeJdMatch } from "@/types/resume";
 
+type QuestionChainItem = {
+  questionId: string;
+  question: string;
+  answer: string;
+  kind: "main" | "follow_up";
+  followUpRound?: 1 | 2 | 3;
+};
+
 type GenerateFollowUpRequestBody = SetupFormData & {
   analysis?: ResumeAnalysis;
   jdMatch?: ResumeJdMatch;
   mainQuestionId?: string;
   mainQuestion?: string;
-  mainAnswer?: string;
+  currentQuestionId?: string;
+  currentQuestion?: string;
+  currentAnswer?: string;
+  currentFollowUpRound?: number;
+  questionChain?: QuestionChainItem[];
 };
 
 type GenerateFollowUpResponse = {
@@ -78,8 +90,47 @@ function extractJsonText(content: string) {
   return trimmedContent.slice(startIndex, endIndex + 1);
 }
 
-function createFollowUpQuestionId(mainQuestionId: string) {
-  return `${mainQuestionId}-follow-up`;
+function isInterviewQuestionKind(value: unknown): value is "main" | "follow_up" {
+  return value === "main" || value === "follow_up";
+}
+
+function isFollowUpRound(value: unknown): value is 1 | 2 | 3 {
+  return value === 1 || value === 2 || value === 3;
+}
+
+function isCurrentFollowUpRound(value: unknown): value is 0 | 1 | 2 | 3 {
+  return value === 0 || isFollowUpRound(value);
+}
+
+function isQuestionChainItem(value: unknown): value is QuestionChainItem {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const data = value as Record<string, unknown>;
+
+  if (
+    typeof data.questionId !== "string" ||
+    typeof data.question !== "string" ||
+    typeof data.answer !== "string" ||
+    !isInterviewQuestionKind(data.kind)
+  ) {
+    return false;
+  }
+
+  if (
+    "followUpRound" in data &&
+    typeof data.followUpRound !== "undefined" &&
+    !isFollowUpRound(data.followUpRound)
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function createFollowUpQuestionId(mainQuestionId: string, nextFollowUpRound: 1 | 2 | 3) {
+  return `${mainQuestionId}-follow-up-${nextFollowUpRound}`;
 }
 
 function normalizeOptionalHint(value: unknown) {
@@ -152,7 +203,11 @@ function validateGenerateFollowUpInput(body: Partial<GenerateFollowUpRequestBody
 
   const mainQuestionId = body.mainQuestionId?.trim() ?? "";
   const mainQuestion = body.mainQuestion?.trim() ?? "";
-  const mainAnswer = body.mainAnswer?.trim() ?? "";
+  const currentQuestionId = body.currentQuestionId?.trim() ?? "";
+  const currentQuestion = body.currentQuestion?.trim() ?? "";
+  const currentAnswer = body.currentAnswer?.trim() ?? "";
+  const currentFollowUpRound = body.currentFollowUpRound;
+  const questionChain = Array.isArray(body.questionChain) ? body.questionChain : null;
 
   if (!mainQuestionId) {
     return {
@@ -168,10 +223,38 @@ function validateGenerateFollowUpInput(body: Partial<GenerateFollowUpRequestBody
     };
   }
 
-  if (!mainAnswer) {
+  if (!currentQuestionId) {
     return {
       isValid: false as const,
-      message: "缺少有效的主问题回答。",
+      message: "缺少有效的当前题目 ID。",
+    };
+  }
+
+  if (!currentQuestion) {
+    return {
+      isValid: false as const,
+      message: "缺少有效的当前题目内容。",
+    };
+  }
+
+  if (!currentAnswer) {
+    return {
+      isValid: false as const,
+      message: "缺少有效的当前题目回答。",
+    };
+  }
+
+  if (!isCurrentFollowUpRound(currentFollowUpRound)) {
+    return {
+      isValid: false as const,
+      message: "当前追问轮次格式不正确。",
+    };
+  }
+
+  if (!questionChain || questionChain.length === 0 || !questionChain.every(isQuestionChainItem)) {
+    return {
+      isValid: false as const,
+      message: "当前主问题链数据格式不正确。",
     };
   }
 
@@ -180,7 +263,11 @@ function validateGenerateFollowUpInput(body: Partial<GenerateFollowUpRequestBody
     formData,
     mainQuestionId,
     mainQuestion,
-    mainAnswer,
+    currentQuestionId,
+    currentQuestion,
+    currentAnswer,
+    currentFollowUpRound,
+    questionChain,
     analysis: isResumeAnalysis(body.analysis) ? body.analysis : undefined,
     jdMatch: isResumeJdMatch(body.jdMatch) ? body.jdMatch : undefined,
   };
@@ -205,12 +292,28 @@ export async function POST(request: Request) {
       );
     }
 
+    if (validationResult.currentFollowUpRound >= 3) {
+      const responseBody: GenerateFollowUpResponse = {
+        followUpQuestion: null,
+      };
+
+      return NextResponse.json(responseBody);
+    }
+
+    const nextFollowUpRound = (
+      validationResult.currentFollowUpRound + 1
+    ) as 1 | 2 | 3;
     const client = createOpenAIClient();
     const { systemPrompt, userPrompt } = buildGenerateFollowUpPrompts({
       jd: validationResult.formData.jd,
       resume: validationResult.formData.resume,
+      mainQuestionId: validationResult.mainQuestionId,
       mainQuestion: validationResult.mainQuestion,
-      mainAnswer: validationResult.mainAnswer,
+      currentQuestionId: validationResult.currentQuestionId,
+      currentQuestion: validationResult.currentQuestion,
+      currentAnswer: validationResult.currentAnswer,
+      currentFollowUpRound: validationResult.currentFollowUpRound,
+      questionChain: validationResult.questionChain,
       analysis: validationResult.analysis,
       jdMatch: validationResult.jdMatch,
     });
@@ -245,10 +348,15 @@ export async function POST(request: Request) {
     const responseBody: GenerateFollowUpResponse = {
       followUpQuestion: followUpQuestion
         ? {
-            id: createFollowUpQuestionId(validationResult.mainQuestionId),
+            id: createFollowUpQuestionId(
+              validationResult.mainQuestionId,
+              nextFollowUpRound,
+            ),
             question: followUpQuestion,
             kind: "follow_up",
             parentQuestionId: validationResult.mainQuestionId,
+            followUpRound: nextFollowUpRound,
+            followUpStatus: "pending",
             followUpHint,
           }
         : null,
