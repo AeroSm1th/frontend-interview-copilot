@@ -1,11 +1,11 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
+import { type ChangeEvent, type FormEvent, useRef, useState } from "react";
 
 import { ResumeAnalysisResult } from "@/components/resume/resume-analysis-result";
 import { PageContainer } from "@/components/shared/page-container";
 import { PageHeader } from "@/components/shared/page-header";
-import { SETUP_FORM_LIMITS } from "@/lib/constants";
+import { RESUME_UPLOAD_LIMITS, SETUP_FORM_LIMITS } from "@/lib/constants";
 import {
   clearResumeAnalysis,
   clearResumeDraft,
@@ -32,6 +32,42 @@ function getResumeValidationMessage(resume: string) {
   }
 
   return "";
+}
+
+function isAcceptedResumeFile(file: File) {
+  const normalizedFileName = file.name.toLowerCase();
+  const hasAcceptedExtension = RESUME_UPLOAD_LIMITS.acceptedExtensions.some((extension) =>
+    normalizedFileName.endsWith(extension),
+  );
+  const hasAcceptedMimeType = RESUME_UPLOAD_LIMITS.acceptedMimeTypes.some(
+    (mimeType) => mimeType === file.type,
+  );
+
+  return hasAcceptedExtension || hasAcceptedMimeType;
+}
+
+function getResumeFileValidationMessage(file: File) {
+  if (!isAcceptedResumeFile(file)) {
+    return "只支持上传 .md 简历文件。";
+  }
+
+  if (file.size === 0) {
+    return "文件内容为空，请检查后重试。";
+  }
+
+  if (file.size > RESUME_UPLOAD_LIMITS.maxFileSizeInBytes) {
+    return `文件不能超过 ${RESUME_UPLOAD_LIMITS.maxFileSizeLabel}。`;
+  }
+
+  return "";
+}
+
+function getResumeFileReadErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return "读取文件失败，请重试。";
 }
 
 function isStringArray(value: unknown) {
@@ -68,6 +104,7 @@ function getAnalyzeResumeErrorMessage(value: unknown) {
 }
 
 export default function ResumePage() {
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [resumeText, setResumeText] = useState(() => readResumeDraft());
   const [analysis, setAnalysis] = useState<ResumeAnalysis | null>(() =>
     readResumeAnalysis(),
@@ -75,12 +112,16 @@ export default function ResumePage() {
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [uploadError, setUploadError] = useState("");
+  const [lastImportedFileName, setLastImportedFileName] = useState("");
 
   const validationMessage = getResumeValidationMessage(resumeText);
   const shouldShowValidationError =
     Boolean(validationMessage) && (hasSubmitted || resumeText.trim().length > 0);
 
-  function handleResumeChange(value: string) {
+  function applyResumeText(value: string) {
+    const hasResumeChanged = value !== resumeText;
+
     setResumeText(value);
     saveResumeDraft(value);
 
@@ -88,9 +129,55 @@ export default function ResumePage() {
       setSubmitError("");
     }
 
-    if (analysis) {
+    if (uploadError) {
+      setUploadError("");
+    }
+
+    if (analysis && hasResumeChanged) {
       setAnalysis(null);
       clearResumeAnalysis();
+    }
+  }
+
+  function handleResumeChange(value: string) {
+    applyResumeText(value);
+  }
+
+  function handleOpenFilePicker() {
+    fileInputRef.current?.click();
+  }
+
+  async function handleFileImport(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    setUploadError("");
+
+    const validationError = getResumeFileValidationMessage(file);
+
+    if (validationError) {
+      setUploadError(validationError);
+      input.value = "";
+      return;
+    }
+
+    try {
+      const fileContent = await file.text();
+
+      if (fileContent.trim().length === 0) {
+        throw new Error("文件内容为空，请检查后重试。");
+      }
+
+      applyResumeText(fileContent);
+      setLastImportedFileName(file.name);
+    } catch (error) {
+      setUploadError(getResumeFileReadErrorMessage(error));
+    } finally {
+      input.value = "";
     }
   }
 
@@ -143,9 +230,15 @@ export default function ResumePage() {
     setResumeText("");
     setAnalysis(null);
     setSubmitError("");
+    setUploadError("");
+    setLastImportedFileName("");
     setHasSubmitted(false);
     clearResumeDraft();
     clearResumeAnalysis();
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   }
 
   return (
@@ -170,6 +263,49 @@ export default function ResumePage() {
                   {resumeText.length} 字 / 至少{" "}
                   {SETUP_FORM_LIMITS.resumeMinLength} 字
                 </span>
+              </div>
+
+              <div className="rounded-2xl border border-dashed border-zinc-200 bg-zinc-50/80 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-zinc-800">
+                      导入 Markdown 简历
+                    </p>
+                    <p className="text-xs text-zinc-500">
+                      支持 .md 文件，大小不超过{" "}
+                      {RESUME_UPLOAD_LIMITS.maxFileSizeLabel}
+                      。导入后仍可继续手动编辑。
+                    </p>
+                  </div>
+
+                  <div className="flex items-center">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".md,text/markdown"
+                      onChange={handleFileImport}
+                      disabled={isAnalyzing}
+                      className="sr-only"
+                      tabIndex={-1}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleOpenFilePicker}
+                      disabled={isAnalyzing}
+                      className="inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 disabled:cursor-not-allowed disabled:border-zinc-100 disabled:bg-zinc-50 disabled:text-zinc-400"
+                    >
+                      选择 .md 文件
+                    </button>
+                  </div>
+                </div>
+
+                {uploadError ? (
+                  <p className="mt-3 text-sm text-red-600">{uploadError}</p>
+                ) : lastImportedFileName ? (
+                  <p className="mt-3 break-all text-sm text-zinc-500">
+                    已导入 {lastImportedFileName}，内容已回填到下方文本框。
+                  </p>
+                ) : null}
               </div>
 
               <textarea

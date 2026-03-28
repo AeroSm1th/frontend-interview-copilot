@@ -13,6 +13,13 @@ export const SETUP_FORM_LIMITS = {
   resumeMinLength: 50,
 } as const;
 
+export const RESUME_UPLOAD_LIMITS = {
+  acceptedExtensions: [".md"],
+  acceptedMimeTypes: ["text/markdown", "text/x-markdown"],
+  maxFileSizeInBytes: 1024 * 1024,
+  maxFileSizeLabel: "1MB",
+} as const;
+
 export const SETUP_FORM_INITIAL_VALUES: SetupFormData = {
   jd: "",
   resume: "",
