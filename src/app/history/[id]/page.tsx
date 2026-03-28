@@ -58,6 +58,10 @@ function getQuestionFollowUpRound(question: InterviewQuestion) {
     : 1;
 }
 
+function getInterviewModeLabel(mode?: InterviewHistoryItem["mode"]) {
+  return mode === "targeted_practice" ? "专项训练" : "普通模拟";
+}
+
 export default function HistoryDetailPage() {
   const params = useParams<{ id: string }>();
   const historyId = params.id;
@@ -125,6 +129,7 @@ export default function HistoryDetailPage() {
   const followUpCount = historyItem.questions.filter(
     (question) => getQuestionKind(question) === "follow_up",
   ).length;
+  const isTargetedPractice = historyItem.mode === "targeted_practice";
   const mainQuestionOrderMap = new Map<string, number>();
   let nextMainQuestionOrder = 0;
 
@@ -176,6 +181,15 @@ export default function HistoryDetailPage() {
                 <span className="inline-flex rounded-full bg-zinc-900 px-3 py-1 text-sm font-medium text-white">
                   评分 {historyItem.report.score} / 100
                 </span>
+                <span
+                  className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${
+                    isTargetedPractice
+                      ? "bg-amber-100 text-amber-700"
+                      : "bg-zinc-100 text-zinc-700"
+                  }`}
+                >
+                  {getInterviewModeLabel(historyItem.mode)}
+                </span>
                 <span className="text-sm text-zinc-500">
                   已回答 {answeredCount} / {historyItem.questions.length} 题
                 </span>
@@ -195,6 +209,34 @@ export default function HistoryDetailPage() {
             {historyItem.report.summary || "暂无总结内容"}
           </p>
         </section>
+
+        {isTargetedPractice && historyItem.targetedContext ? (
+          <section className="rounded-3xl border border-amber-200 bg-amber-50/70 p-6 shadow-sm">
+            <h2 className="text-base font-semibold text-zinc-900">专项聚焦</h2>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <article className="rounded-2xl bg-white/80 px-4 py-4">
+                <h3 className="text-sm font-medium text-zinc-900">聚焦薄弱点</h3>
+                <ul className="mt-3 space-y-3 text-sm leading-7 text-zinc-600">
+                  {historyItem.targetedContext.focusWeaknesses.map((item) => (
+                    <li key={item} className="rounded-2xl bg-amber-50 px-4 py-3">
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </article>
+              <article className="rounded-2xl bg-white/80 px-4 py-4">
+                <h3 className="text-sm font-medium text-zinc-900">聚焦建议</h3>
+                <ul className="mt-3 space-y-3 text-sm leading-7 text-zinc-600">
+                  {historyItem.targetedContext.focusSuggestions.map((item) => (
+                    <li key={item} className="rounded-2xl bg-amber-50 px-4 py-3">
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </article>
+            </div>
+          </section>
+        ) : null}
 
         <section className="grid gap-4 md:grid-cols-3">
           {reportSections.map((section) => (

@@ -273,6 +273,8 @@ export default function InterviewPage() {
         maxQuestionIndex,
       ),
       answers: savedSession.answers,
+      mode: savedSession.mode,
+      targetedContext: savedSession.targetedContext,
     };
   });
   const [isGeneratingFollowUp, setIsGeneratingFollowUp] = useState(false);
@@ -283,6 +285,9 @@ export default function InterviewPage() {
   });
   const questions =
     session.questions.length > 0 ? session.questions : MOCK_INTERVIEW_QUESTIONS;
+  const interviewMode = session.mode ?? "standard";
+  const isTargetedPractice = interviewMode === "targeted_practice";
+  const targetedContext = session.targetedContext ?? null;
   const maxQuestionIndex = questions.length - 1;
   const mainQuestionOrderMap = useMemo(() => {
     const nextOrderMap = new Map<string, number>();
@@ -692,6 +697,23 @@ export default function InterviewPage() {
         />
 
         <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <span
+              className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${
+                isTargetedPractice
+                  ? "bg-amber-100 text-amber-700"
+                  : "bg-zinc-900 text-white"
+              }`}
+            >
+              {isTargetedPractice ? "专项训练" : "普通模拟"}
+            </span>
+            {isTargetedPractice && targetedContext ? (
+              <p className="text-sm text-zinc-500">
+                本轮题目聚焦上轮暴露的薄弱点。
+              </p>
+            ) : null}
+          </div>
+
           <div className="mb-4 flex items-center justify-between gap-4">
             <div>
               <p className="text-sm font-medium text-zinc-500">当前进度</p>

@@ -15,9 +15,11 @@ import type {
 import type {
   InterviewAnswer,
   InterviewHistoryItem,
+  InterviewMode,
   InterviewQuestion,
   InterviewReport,
   InterviewSession,
+  InterviewTargetedContext,
   SetupFormData,
 } from "@/types/interview";
 
@@ -37,6 +39,10 @@ function isSetupFormData(value: unknown): value is SetupFormData {
 
 function isInterviewQuestionKind(value: unknown) {
   return value === "main" || value === "follow_up";
+}
+
+function isInterviewMode(value: unknown): value is InterviewMode {
+  return value === "standard" || value === "targeted_practice";
 }
 
 function isFollowUpRound(value: unknown) {
@@ -113,6 +119,62 @@ function isInterviewAnswer(value: unknown): value is InterviewAnswer {
   return typeof data.questionId === "string" && typeof data.answer === "string";
 }
 
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function isInterviewTargetedContext(
+  value: unknown,
+): value is InterviewTargetedContext {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const data = value as Record<string, unknown>;
+
+  return (
+    data.source === "report" &&
+    isStringArray(data.focusWeaknesses) &&
+    isStringArray(data.focusSuggestions)
+  );
+}
+
+function normalizeInterviewMode(value: unknown): InterviewMode {
+  return isInterviewMode(value) ? value : "standard";
+}
+
+function normalizeInterviewTargetedContext(
+  value: unknown,
+): InterviewTargetedContext | null {
+  return isInterviewTargetedContext(value) ? value : null;
+}
+
+function normalizeInterviewSessionData(
+  session: Omit<InterviewSession, "mode" | "targetedContext"> & {
+    mode?: unknown;
+    targetedContext?: unknown;
+  },
+): InterviewSession {
+  return {
+    ...session,
+    mode: normalizeInterviewMode(session.mode),
+    targetedContext: normalizeInterviewTargetedContext(session.targetedContext),
+  };
+}
+
+function normalizeInterviewHistoryItemData(
+  item: Omit<InterviewHistoryItem, "mode" | "targetedContext"> & {
+    mode?: unknown;
+    targetedContext?: unknown;
+  },
+): InterviewHistoryItem {
+  return {
+    ...item,
+    mode: normalizeInterviewMode(item.mode),
+    targetedContext: normalizeInterviewTargetedContext(item.targetedContext),
+  };
+}
+
 function isInterviewSession(value: unknown): value is InterviewSession {
   if (!value || typeof value !== "object") {
     return false;
@@ -133,6 +195,23 @@ function isInterviewSession(value: unknown): value is InterviewSession {
   }
 
   if (!Array.isArray(data.answers) || !data.answers.every(isInterviewAnswer)) {
+    return false;
+  }
+
+  if (
+    "mode" in data &&
+    typeof data.mode !== "undefined" &&
+    !isInterviewMode(data.mode)
+  ) {
+    return false;
+  }
+
+  if (
+    "targetedContext" in data &&
+    typeof data.targetedContext !== "undefined" &&
+    data.targetedContext !== null &&
+    !isInterviewTargetedContext(data.targetedContext)
+  ) {
     return false;
   }
 
@@ -173,7 +252,14 @@ function isInterviewHistoryItem(value: unknown): value is InterviewHistoryItem {
     data.questions.every(isInterviewQuestion) &&
     Array.isArray(data.answers) &&
     data.answers.every(isInterviewAnswer) &&
-    isInterviewReport(data.report)
+    isInterviewReport(data.report) &&
+    (!("mode" in data) ||
+      typeof data.mode === "undefined" ||
+      isInterviewMode(data.mode)) &&
+    (!("targetedContext" in data) ||
+      typeof data.targetedContext === "undefined" ||
+      data.targetedContext === null ||
+      isInterviewTargetedContext(data.targetedContext))
   );
 }
 
@@ -336,6 +422,8 @@ function normalizeLegacyInterviewSession(value: unknown): InterviewSession | nul
     questions: [],
     currentQuestionIndex: data.currentQuestionIndex,
     answers,
+    mode: "standard",
+    targetedContext: null,
   };
 }
 
@@ -394,13 +482,13 @@ export function readInterviewSession(): InterviewSession {
     const parsedValue: unknown = JSON.parse(rawValue);
 
     if (isInterviewSession(parsedValue)) {
-      return parsedValue;
+      return normalizeInterviewSessionData(parsedValue);
     }
 
     const normalizedLegacySession = normalizeLegacyInterviewSession(parsedValue);
 
     if (normalizedLegacySession) {
-      return normalizedLegacySession;
+      return normalizeInterviewSessionData(normalizedLegacySession);
     }
   } catch {
     return INTERVIEW_SESSION_INITIAL_VALUES;
@@ -416,7 +504,7 @@ export function saveInterviewSession(values: InterviewSession) {
 
   window.localStorage.setItem(
     STORAGE_KEYS.interviewSession,
-    JSON.stringify(values),
+    JSON.stringify(normalizeInterviewSessionData(values)),
   );
 }
 
@@ -486,7 +574,7 @@ export function readInterviewHistory(): InterviewHistoryItem[] {
     const parsedValue: unknown = JSON.parse(rawValue);
 
     if (isInterviewHistory(parsedValue)) {
-      return parsedValue;
+      return parsedValue.map((item) => normalizeInterviewHistoryItemData(item));
     }
   } catch {
     return [];
@@ -519,7 +607,7 @@ function saveInterviewHistory(values: InterviewHistoryItem[]) {
 
   window.localStorage.setItem(
     STORAGE_KEYS.interviewHistory,
-    JSON.stringify(values),
+    JSON.stringify(values.map((item) => normalizeInterviewHistoryItemData(item))),
   );
 }
 

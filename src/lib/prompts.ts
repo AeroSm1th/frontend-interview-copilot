@@ -14,6 +14,16 @@ type GenerateQuestionsPromptInput = {
   jdMatch?: ResumeJdMatch | null;
 };
 
+type GenerateTargetedQuestionsPromptInput = {
+  jd: string;
+  resume: string;
+  weaknesses: string[];
+  suggestions: string[];
+  analysis?: ResumeAnalysis | null;
+  jdMatch?: ResumeJdMatch | null;
+  previousQuestions?: string[];
+};
+
 type GenerateFollowUpPromptInput = {
   jd: string;
   resume: string;
@@ -105,6 +115,74 @@ ${analysisText}
 
 可选的岗位匹配结果：
 ${jdMatchText}`;
+
+  return {
+    systemPrompt,
+    userPrompt,
+  };
+}
+
+export function buildGenerateTargetedQuestionsPrompts({
+  jd,
+  resume,
+  weaknesses,
+  suggestions,
+  analysis,
+  jdMatch,
+  previousQuestions = [],
+}: GenerateTargetedQuestionsPromptInput) {
+  const analysisText = analysis ? JSON.stringify(analysis, null, 2) : "无";
+  const jdMatchText = jdMatch ? JSON.stringify(jdMatch, null, 2) : "无";
+  const previousQuestionsText =
+    previousQuestions.length > 0
+      ? JSON.stringify(previousQuestions, null, 2)
+      : "无";
+
+  const systemPrompt = `你是一名负责前端实习生模拟面试专项训练的面试官。
+
+你的任务是根据当前岗位 JD、当前简历原文，以及一份已经生成的面试报告中的薄弱点和改进建议，生成 5 道中文专项训练主问题。
+
+要求：
+1. 这不是重新生成一套泛化面试题，而是围绕当前报告暴露出来的薄弱项做专项强化训练。
+2. 题目必须优先覆盖 weaknesses 和 suggestions 中提到的问题，尽量让每道题都能帮助用户补强薄弱点。
+3. 始终以当前岗位 JD 和当前简历原文为主输入；如果提供分析结果或 JD 匹配结果，只能作为辅助摘要。
+4. 如果辅助摘要与岗位 JD 或简历原文冲突，必须以岗位 JD 和简历原文为准。
+5. 题目难度应符合前端实习或校招场景，不要过难。
+6. 不要生成重复题目，也尽量避免和 previousQuestions 语义重复。
+7. 只返回 JSON，不要返回 markdown，不要添加额外解释。
+8. JSON 格式必须严格如下：
+{
+  "questions": [
+    { "id": "q1", "question": "..." },
+    { "id": "q2", "question": "..." },
+    { "id": "q3", "question": "..." },
+    { "id": "q4", "question": "..." },
+    { "id": "q5", "question": "..." }
+  ]
+}`;
+
+  const userPrompt = `请基于下面信息生成专项训练题。
+
+当前岗位 JD：
+${jd}
+
+当前简历原文：
+${resume}
+
+当前报告中的薄弱点：
+${JSON.stringify(weaknesses, null, 2)}
+
+当前报告中的改进建议：
+${JSON.stringify(suggestions, null, 2)}
+
+可选的简历分析结果：
+${analysisText}
+
+可选的岗位匹配结果：
+${jdMatchText}
+
+上一轮已经出现过的题目：
+${previousQuestionsText}`;
 
   return {
     systemPrompt,

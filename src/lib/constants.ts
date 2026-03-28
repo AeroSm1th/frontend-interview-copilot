@@ -35,4 +35,6 @@ export const INTERVIEW_SESSION_INITIAL_VALUES: InterviewSession = {
   questions: [],
   currentQuestionIndex: 0,
   answers: [],
+  mode: "standard",
+  targetedContext: null,
 };

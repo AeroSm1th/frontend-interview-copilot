@@ -37,6 +37,10 @@ function getTextPreview(value: string, maxLength: number) {
   return `${normalizedText.slice(0, maxLength).trim()}...`;
 }
 
+function getInterviewModeLabel(mode?: InterviewHistoryItem["mode"]) {
+  return mode === "targeted_practice" ? "专项训练" : "普通模拟";
+}
+
 export function HistoryListItem({
   item,
   onDelete,
@@ -44,6 +48,7 @@ export function HistoryListItem({
   const answeredCount = item.answers.filter((answer) =>
     Boolean(answer.answer.trim()),
   ).length;
+  const isTargetedPractice = item.mode === "targeted_practice";
 
   return (
     <article className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
@@ -55,6 +60,15 @@ export function HistoryListItem({
           <div className="flex flex-wrap items-center gap-3">
             <span className="inline-flex rounded-full bg-zinc-900 px-3 py-1 text-sm font-medium text-white">
               评分 {item.report.score}
+            </span>
+            <span
+              className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${
+                isTargetedPractice
+                  ? "bg-amber-100 text-amber-700"
+                  : "bg-zinc-100 text-zinc-700"
+              }`}
+            >
+              {getInterviewModeLabel(item.mode)}
             </span>
             <span className="text-sm text-zinc-500">
               已回答 {answeredCount} / {item.questions.length} 题

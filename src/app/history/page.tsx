@@ -97,7 +97,7 @@ export default function HistoryPage() {
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
         <PageHeader
           title="历史记录"
-          description="这里会展示当前浏览器中保存的面试复盘历史，列表按最新记录优先展示。"
+          description="这里会展示当前浏览器中保存的面试复盘历史，包括普通模拟和专项训练，列表按最新记录优先展示。"
         />
 
         <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">

@@ -8,6 +8,14 @@ export type InterviewQuestion = {
   followUpHint?: string | null;
 };
 
+export type InterviewMode = "standard" | "targeted_practice";
+
+export type InterviewTargetedContext = {
+  source: "report";
+  focusWeaknesses: string[];
+  focusSuggestions: string[];
+};
+
 export type SetupFormData = {
   jd: string;
   resume: string;
@@ -31,6 +39,8 @@ export type InterviewSession = {
   questions: InterviewQuestion[];
   currentQuestionIndex: number;
   answers: InterviewAnswer[];
+  mode?: InterviewMode;
+  targetedContext?: InterviewTargetedContext | null;
 };
 
 export type InterviewReport = {
@@ -48,4 +58,6 @@ export type InterviewHistoryItem = {
   questions: InterviewQuestion[];
   answers: InterviewAnswer[];
   report: InterviewReport;
+  mode?: InterviewMode;
+  targetedContext?: InterviewTargetedContext | null;
 };

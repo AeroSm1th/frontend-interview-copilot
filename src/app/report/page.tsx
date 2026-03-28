@@ -17,11 +17,20 @@ import {
   readInterviewSession,
   readSetupForm,
   saveInterviewReport,
+  saveInterviewSession,
 } from "@/lib/storage";
 import { validateSetupForm } from "@/lib/validation";
-import type { InterviewReport } from "@/types/interview";
+import type { InterviewQuestion, InterviewReport } from "@/types/interview";
 
 type GenerateReportErrorResponse = {
+  message?: string;
+};
+
+type GenerateTargetedQuestionsSuccessResponse = {
+  questions: InterviewQuestion[];
+};
+
+type GenerateTargetedQuestionsErrorResponse = {
   message?: string;
 };
 
@@ -38,6 +47,61 @@ function getGenerateReportErrorMessage(value: unknown) {
   return "生成报告失败，请稍后重试。";
 }
 
+function isInterviewQuestionKind(value: unknown) {
+  return value === "main" || value === "follow_up";
+}
+
+function isInterviewQuestion(value: unknown): value is InterviewQuestion {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const data = value as Record<string, unknown>;
+
+  if (typeof data.id !== "string" || typeof data.question !== "string") {
+    return false;
+  }
+
+  if (
+    "kind" in data &&
+    typeof data.kind !== "undefined" &&
+    !isInterviewQuestionKind(data.kind)
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function isGenerateTargetedQuestionsSuccessResponse(
+  value:
+    | GenerateTargetedQuestionsSuccessResponse
+    | GenerateTargetedQuestionsErrorResponse,
+): value is GenerateTargetedQuestionsSuccessResponse {
+  return Array.isArray((value as GenerateTargetedQuestionsSuccessResponse).questions);
+}
+
+function getGenerateTargetedQuestionsErrorMessage(
+  value:
+    | GenerateTargetedQuestionsSuccessResponse
+    | GenerateTargetedQuestionsErrorResponse,
+) {
+  if ("message" in value && typeof value.message === "string") {
+    return value.message;
+  }
+
+  return "生成专项训练题失败，请稍后重试。";
+}
+
+function normalizeMainQuestions(questions: InterviewQuestion[]): InterviewQuestion[] {
+  return questions.map((question) => ({
+    ...question,
+    kind: "main",
+    parentQuestionId: null,
+    followUpStatus: "pending",
+  }));
+}
+
 function createHistoryItemId() {
   return (
     globalThis.crypto?.randomUUID?.() ??
@@ -50,6 +114,8 @@ export default function ReportPage() {
   const hasTriggeredGeneration = useRef(false);
   const setupForm = useMemo(() => readSetupForm(), []);
   const interviewSession = useMemo(() => readInterviewSession(), []);
+  const interviewMode = interviewSession.mode ?? "standard";
+  const isTargetedPractice = interviewMode === "targeted_practice";
   const hasValidSetup = validateSetupForm(setupForm).isValid;
   const currentQuestions =
     interviewSession.questions.length > 0
@@ -77,12 +143,86 @@ export default function ReportPage() {
   );
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [reportError, setReportError] = useState("");
+  const [isGeneratingTargetedQuestions, setIsGeneratingTargetedQuestions] =
+    useState(false);
+  const [targetedQuestionsError, setTargetedQuestionsError] = useState("");
+  const canStartTargetedPractice =
+    !isTargetedPractice &&
+    Boolean(report) &&
+    ((report?.weaknesses.length ?? 0) > 0 || (report?.suggestions.length ?? 0) > 0);
 
   function handleRestart() {
     clearSetupForm();
     clearInterviewSession();
     clearInterviewReport();
     router.push("/resume");
+  }
+
+  async function handleStartTargetedPractice() {
+    if (!report) {
+      return;
+    }
+
+    try {
+      setIsGeneratingTargetedQuestions(true);
+      setTargetedQuestionsError("");
+
+      const { reusableAnalysis, reusableJdMatch } = getReusableResumeContext({
+        resume: setupForm.resume,
+        jd: setupForm.jd,
+      });
+
+      const response = await fetch("/api/generate-targeted-questions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          jd: setupForm.jd,
+          resume: setupForm.resume,
+          weaknesses: report.weaknesses,
+          suggestions: report.suggestions,
+          analysis: reusableAnalysis,
+          jdMatch: reusableJdMatch,
+          previousQuestions: currentQuestions.map((question) => question.question),
+        }),
+      });
+      const result = (await response.json()) as
+        | GenerateTargetedQuestionsSuccessResponse
+        | GenerateTargetedQuestionsErrorResponse;
+
+      if (!response.ok) {
+        throw new Error(getGenerateTargetedQuestionsErrorMessage(result));
+      }
+
+      if (
+        !isGenerateTargetedQuestionsSuccessResponse(result) ||
+        result.questions.length !== 5 ||
+        !result.questions.every(isInterviewQuestion)
+      ) {
+        throw new Error("生成的专项训练题数量或格式不正确，请稍后重试。");
+      }
+
+      clearInterviewReport();
+      saveInterviewSession({
+        questions: normalizeMainQuestions(result.questions),
+        answers: [],
+        currentQuestionIndex: 0,
+        mode: "targeted_practice",
+        targetedContext: {
+          source: "report",
+          focusWeaknesses: report.weaknesses,
+          focusSuggestions: report.suggestions,
+        },
+      });
+      router.push("/interview");
+    } catch (error) {
+      setTargetedQuestionsError(
+        error instanceof Error ? error.message : "生成专项训练题失败，请稍后重试。",
+      );
+    } finally {
+      setIsGeneratingTargetedQuestions(false);
+    }
   }
 
   async function generateReport() {
@@ -135,6 +275,8 @@ export default function ReportPage() {
           questions: currentQuestions,
           answers: interviewSession.answers,
           report: nextReport,
+          mode: interviewSession.mode,
+          targetedContext: interviewSession.targetedContext,
         });
       } catch {}
     } catch (error) {
@@ -264,7 +406,18 @@ export default function ReportPage() {
         <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
             <div>
-              <p className="text-sm font-medium text-zinc-500">综合评分</p>
+              <div className="flex flex-wrap items-center gap-3">
+                <p className="text-sm font-medium text-zinc-500">综合评分</p>
+                <span
+                  className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${
+                    isTargetedPractice
+                      ? "bg-amber-100 text-amber-700"
+                      : "bg-zinc-900 text-white"
+                  }`}
+                >
+                  {isTargetedPractice ? "专项训练" : "普通模拟"}
+                </span>
+              </div>
               <div className="mt-3 flex items-end gap-3">
                 <span className="text-5xl font-semibold tracking-tight text-zinc-900">
                   {report.score}
@@ -331,6 +484,36 @@ export default function ReportPage() {
           ))}
         </section>
 
+        {canStartTargetedPractice ? (
+          <section className="rounded-3xl border border-amber-200 bg-amber-50/70 p-6 shadow-sm">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+              <div className="space-y-2">
+                <h2 className="text-base font-semibold text-zinc-900">
+                  针对薄弱点再练
+                </h2>
+                <p className="text-sm leading-7 text-zinc-600">
+                  基于当前报告中的薄弱点和建议，生成一轮新的专项训练题，并继续沿用现有面试、复盘和历史链路。
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void handleStartTargetedPractice()}
+                disabled={isGeneratingTargetedQuestions}
+                className="inline-flex items-center justify-center rounded-xl bg-zinc-900 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:text-zinc-500"
+              >
+                {isGeneratingTargetedQuestions
+                  ? "正在生成专项训练题..."
+                  : "针对薄弱点再练"}
+              </button>
+            </div>
+            {targetedQuestionsError ? (
+              <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+                {targetedQuestionsError}
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+
         <section className="flex flex-col gap-3 sm:flex-row sm:justify-end">
           <Link
             href="/history"
@@ -343,6 +526,7 @@ export default function ReportPage() {
             onClick={() => {
               clearInterviewReport();
               setReport(null);
+              setTargetedQuestionsError("");
               hasTriggeredGeneration.current = true;
               void generateReport();
             }}
@@ -353,7 +537,8 @@ export default function ReportPage() {
           <button
             type="button"
             onClick={handleRestart}
-            className="inline-flex items-center justify-center rounded-xl bg-zinc-900 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-zinc-700"
+            disabled={isGeneratingTargetedQuestions}
+            className="inline-flex items-center justify-center rounded-xl bg-zinc-900 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:text-zinc-500"
           >
             重新开始
           </button>
