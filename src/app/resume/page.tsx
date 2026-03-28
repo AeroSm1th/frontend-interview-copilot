@@ -4,6 +4,7 @@ import { type ChangeEvent, type FormEvent, useEffect, useRef, useState } from "r
 
 import { ResumeAnalysisResult } from "@/components/resume/resume-analysis-result";
 import { ResumeChatPanel } from "@/components/resume/resume-chat-panel";
+import { ResumeJdMatchPanel } from "@/components/resume/resume-jd-match-panel";
 import { PageContainer } from "@/components/shared/page-container";
 import { PageHeader } from "@/components/shared/page-header";
 import { RESUME_UPLOAD_LIMITS, SETUP_FORM_LIMITS } from "@/lib/constants";
@@ -11,14 +12,24 @@ import {
   clearResumeAnalysis,
   clearResumeChatMessages,
   clearResumeDraft,
+  clearResumeJdDraft,
+  clearResumeJdMatch,
   readResumeAnalysis,
   readResumeChatMessages,
   readResumeDraft,
+  readResumeJdDraft,
+  readResumeJdMatch,
   saveResumeAnalysis,
   saveResumeChatMessages,
   saveResumeDraft,
+  saveResumeJdDraft,
+  saveResumeJdMatch,
 } from "@/lib/storage";
-import type { ResumeAnalysis, ResumeChatMessage } from "@/types/resume";
+import type {
+  ResumeAnalysis,
+  ResumeChatMessage,
+  ResumeJdMatch,
+} from "@/types/resume";
 
 type AnalyzeResumeErrorResponse = {
   message?: string;
@@ -32,6 +43,10 @@ type ResumeChatErrorResponse = {
   message?: string;
 };
 
+type AnalyzeResumeMatchErrorResponse = {
+  message?: string;
+};
+
 function getResumeValidationMessage(resume: string) {
   const length = resume.trim().length;
 
@@ -41,6 +56,20 @@ function getResumeValidationMessage(resume: string) {
 
   if (length < SETUP_FORM_LIMITS.resumeMinLength) {
     return `简历内容至少需要 ${SETUP_FORM_LIMITS.resumeMinLength} 个字符。`;
+  }
+
+  return "";
+}
+
+function getJdValidationMessage(jd: string) {
+  const length = jd.trim().length;
+
+  if (length === 0) {
+    return "请输入岗位 JD。";
+  }
+
+  if (length < SETUP_FORM_LIMITS.jdMinLength) {
+    return `岗位 JD 至少需要 ${SETUP_FORM_LIMITS.jdMinLength} 个字符。`;
   }
 
   return "";
@@ -102,6 +131,24 @@ function isResumeAnalysisResponse(value: unknown): value is ResumeAnalysis {
   );
 }
 
+function isResumeJdMatchResponse(value: unknown): value is ResumeJdMatch {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const data = value as Record<string, unknown>;
+
+  return (
+    typeof data.matchScore === "number" &&
+    Number.isFinite(data.matchScore) &&
+    typeof data.summary === "string" &&
+    isStringArray(data.matchedSkills) &&
+    isStringArray(data.missingSkills) &&
+    isStringArray(data.risks) &&
+    isStringArray(data.suggestions)
+  );
+}
+
 function getAnalyzeResumeErrorMessage(value: unknown) {
   if (
     value &&
@@ -136,6 +183,19 @@ function getResumeChatErrorMessage(value: unknown) {
   return "简历对话失败，请稍后重试。";
 }
 
+function getResumeMatchErrorMessage(value: unknown) {
+  if (
+    value &&
+    typeof value === "object" &&
+    "message" in value &&
+    typeof value.message === "string"
+  ) {
+    return value.message;
+  }
+
+  return "JD 匹配分析失败，请稍后重试。";
+}
+
 function createResumeChatMessage(
   role: ResumeChatMessage["role"],
   content: string,
@@ -154,9 +214,14 @@ export default function ResumePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [resumeText, setResumeText] = useState("");
   const [analysis, setAnalysis] = useState<ResumeAnalysis | null>(null);
+  const [jdText, setJdText] = useState("");
+  const [jdMatch, setJdMatch] = useState<ResumeJdMatch | null>(null);
   const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [hasSubmittedJdMatch, setHasSubmittedJdMatch] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isMatching, setIsMatching] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [jdMatchError, setJdMatchError] = useState("");
   const [uploadError, setUploadError] = useState("");
   const [lastImportedFileName, setLastImportedFileName] = useState("");
   const [chatMessages, setChatMessages] = useState<ResumeChatMessage[]>([]);
@@ -166,30 +231,45 @@ export default function ResumePage() {
   const [isHydrated, setIsHydrated] = useState(false);
 
   const validationMessage = getResumeValidationMessage(resumeText);
+  const jdValidationMessage = getJdValidationMessage(jdText);
   const shouldShowValidationError =
     Boolean(validationMessage) && (hasSubmitted || resumeText.trim().length > 0);
+  const shouldShowJdValidationError =
+    Boolean(jdValidationMessage) &&
+    (hasSubmittedJdMatch || jdText.trim().length > 0);
   const canUseChat = Boolean(analysis) && resumeText.trim().length > 0;
-  const isResumeFormBusy = isAnalyzing || isChatting;
+  const canUseJdMatch = resumeText.trim().length > 0;
+  const isResumeFormBusy = isAnalyzing || isChatting || isMatching;
   const shouldShowInitialLoadingState = isHydrated && isAnalyzing && !analysis;
   const shouldShowRefreshingState = isHydrated && isAnalyzing && Boolean(analysis);
   const shouldShowSubmitFailureState =
     isHydrated && !isAnalyzing && !analysis && Boolean(submitError);
   const shouldShowEmptyState =
     isHydrated && !isAnalyzing && !analysis && !submitError;
+  const shouldShowJdMatchPanel = isHydrated && canUseJdMatch;
   const shouldShowChatPanel = isHydrated && canUseChat;
 
   useEffect(() => {
     const nextResumeText = readResumeDraft();
     const nextAnalysis = readResumeAnalysis();
+    const nextJdText = readResumeJdDraft();
+    const nextJdMatch = readResumeJdMatch();
     const nextChatMessages = readResumeChatMessages();
 
     setResumeText(nextResumeText);
     setAnalysis(nextAnalysis);
+    setJdText(nextJdText);
 
     if (nextResumeText.trim().length > 0 && nextAnalysis) {
       setChatMessages(nextChatMessages);
     } else {
       clearResumeChatMessages();
+    }
+
+    if (nextResumeText.trim().length > 0 && nextJdText.trim().length > 0 && nextJdMatch) {
+      setJdMatch(nextJdMatch);
+    } else {
+      clearResumeJdMatch();
     }
 
     setIsHydrated(true);
@@ -200,6 +280,13 @@ export default function ResumePage() {
     setChatInput("");
     setChatError("");
     clearResumeChatMessages();
+  }
+
+  function clearResumeJdMatchState() {
+    setJdMatch(null);
+    setJdMatchError("");
+    setHasSubmittedJdMatch(false);
+    clearResumeJdMatch();
   }
 
   function applyResumeText(value: string) {
@@ -220,17 +307,41 @@ export default function ResumePage() {
       setChatError("");
     }
 
+    if (jdMatchError) {
+      setJdMatchError("");
+    }
+
     if (hasResumeChanged && analysis) {
       clearResumeChatState();
+      clearResumeJdMatchState();
       setAnalysis(null);
       clearResumeAnalysis();
     } else if (hasResumeChanged && chatMessages.length > 0) {
       clearResumeChatState();
     }
+
+    if (hasResumeChanged && jdMatch) {
+      clearResumeJdMatchState();
+    }
   }
 
   function handleResumeChange(value: string) {
     applyResumeText(value);
+  }
+
+  function handleJdChange(value: string) {
+    const hasJdChanged = value !== jdText;
+
+    setJdText(value);
+    saveResumeJdDraft(value);
+
+    if (jdMatchError) {
+      setJdMatchError("");
+    }
+
+    if (hasJdChanged && jdMatch) {
+      clearResumeJdMatchState();
+    }
   }
 
   function handleOpenFilePicker() {
@@ -320,12 +431,17 @@ export default function ResumePage() {
   function handleClear() {
     setResumeText("");
     setAnalysis(null);
+    setJdText("");
     setSubmitError("");
+    setJdMatchError("");
     setUploadError("");
     setLastImportedFileName("");
     setHasSubmitted(false);
+    setHasSubmittedJdMatch(false);
     clearResumeDraft();
     clearResumeAnalysis();
+    clearResumeJdDraft();
+    clearResumeJdMatchState();
     clearResumeChatState();
 
     if (fileInputRef.current) {
@@ -404,6 +520,57 @@ export default function ResumePage() {
       );
     } finally {
       setIsChatting(false);
+    }
+  }
+
+  async function handleJdMatchSubmit() {
+    setHasSubmittedJdMatch(true);
+    setJdMatchError("");
+
+    if (jdValidationMessage) {
+      return;
+    }
+
+    if (resumeText.trim().length === 0) {
+      setJdMatchError("请先提供简历内容。");
+      return;
+    }
+
+    try {
+      setIsMatching(true);
+
+      const response = await fetch("/api/analyze-resume-match", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          resume: resumeText,
+          analysis,
+          jd: jdText,
+        }),
+      });
+      const result = (await response.json()) as
+        | ResumeJdMatch
+        | AnalyzeResumeMatchErrorResponse;
+
+      if (!response.ok) {
+        throw new Error(getResumeMatchErrorMessage(result));
+      }
+
+      if (!isResumeJdMatchResponse(result)) {
+        throw new Error("返回的 JD 匹配分析结果格式不正确，请稍后重试。");
+      }
+
+      setJdMatch(result);
+      saveResumeJdDraft(jdText);
+      saveResumeJdMatch(result);
+    } catch (error) {
+      setJdMatchError(
+        error instanceof Error ? error.message : "JD 匹配分析失败，请稍后重试。",
+      );
+    } finally {
+      setIsMatching(false);
     }
   }
 
@@ -567,13 +734,27 @@ export default function ResumePage() {
           <ResumeAnalysisResult analysis={analysis} />
         ) : null}
 
+        {shouldShowJdMatchPanel ? (
+          <ResumeJdMatchPanel
+            jdText={jdText}
+            match={jdMatch}
+            errorMessage={jdMatchError}
+            validationMessage={jdValidationMessage}
+            shouldShowValidationError={shouldShowJdValidationError}
+            isMatching={isMatching}
+            disabled={isAnalyzing || isChatting}
+            onJdChange={handleJdChange}
+            onSubmit={handleJdMatchSubmit}
+          />
+        ) : null}
+
         {shouldShowChatPanel ? (
           <ResumeChatPanel
             messages={chatMessages}
             inputValue={chatInput}
             errorMessage={chatError}
             isSending={isChatting}
-            disabled={isAnalyzing}
+            disabled={isAnalyzing || isMatching}
             onInputChange={handleChatInputChange}
             onSend={handleChatSend}
             onShortcutClick={handleChatShortcutClick}

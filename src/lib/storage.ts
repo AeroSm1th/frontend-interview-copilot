@@ -3,7 +3,11 @@ import {
   SETUP_FORM_INITIAL_VALUES,
   STORAGE_KEYS,
 } from "@/lib/constants";
-import type { ResumeAnalysis, ResumeChatMessage } from "@/types/resume";
+import type {
+  ResumeAnalysis,
+  ResumeChatMessage,
+  ResumeJdMatch,
+} from "@/types/resume";
 import type {
   InterviewAnswer,
   InterviewQuestion,
@@ -108,6 +112,27 @@ function isResumeAnalysis(value: unknown): value is ResumeAnalysis {
     data.suggestedImprovements.every((item) => typeof item === "string") &&
     Array.isArray(data.keywords) &&
     data.keywords.every((item) => typeof item === "string")
+  );
+}
+
+function isResumeJdMatch(value: unknown): value is ResumeJdMatch {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const data = value as Record<string, unknown>;
+
+  return (
+    typeof data.matchScore === "number" &&
+    typeof data.summary === "string" &&
+    Array.isArray(data.matchedSkills) &&
+    data.matchedSkills.every((item) => typeof item === "string") &&
+    Array.isArray(data.missingSkills) &&
+    data.missingSkills.every((item) => typeof item === "string") &&
+    Array.isArray(data.risks) &&
+    data.risks.every((item) => typeof item === "string") &&
+    Array.isArray(data.suggestions) &&
+    data.suggestions.every((item) => typeof item === "string")
   );
 }
 
@@ -409,4 +434,70 @@ export function clearResumeChatMessages() {
   }
 
   window.localStorage.removeItem(STORAGE_KEYS.resumeChat);
+}
+
+export function readResumeJdDraft(): string {
+  if (!isBrowser()) {
+    return "";
+  }
+
+  const rawValue = window.localStorage.getItem(STORAGE_KEYS.resumeJdDraft);
+
+  return typeof rawValue === "string" ? rawValue : "";
+}
+
+export function saveResumeJdDraft(value: string) {
+  if (!isBrowser()) {
+    return;
+  }
+
+  window.localStorage.setItem(STORAGE_KEYS.resumeJdDraft, value);
+}
+
+export function clearResumeJdDraft() {
+  if (!isBrowser()) {
+    return;
+  }
+
+  window.localStorage.removeItem(STORAGE_KEYS.resumeJdDraft);
+}
+
+export function readResumeJdMatch(): ResumeJdMatch | null {
+  if (!isBrowser()) {
+    return null;
+  }
+
+  const rawValue = window.localStorage.getItem(STORAGE_KEYS.resumeJdMatch);
+
+  if (!rawValue) {
+    return null;
+  }
+
+  try {
+    const parsedValue: unknown = JSON.parse(rawValue);
+
+    if (isResumeJdMatch(parsedValue)) {
+      return parsedValue;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+export function saveResumeJdMatch(value: ResumeJdMatch) {
+  if (!isBrowser()) {
+    return;
+  }
+
+  window.localStorage.setItem(STORAGE_KEYS.resumeJdMatch, JSON.stringify(value));
+}
+
+export function clearResumeJdMatch() {
+  if (!isBrowser()) {
+    return;
+  }
+
+  window.localStorage.removeItem(STORAGE_KEYS.resumeJdMatch);
 }

@@ -26,6 +26,12 @@ type ResumeChatPromptInput = {
   messages?: ResumeChatMessage[];
 };
 
+type ResumeJdMatchPromptInput = {
+  resume: string;
+  jd: string;
+  analysis?: ResumeAnalysis | null;
+};
+
 export function buildGenerateQuestionsPrompts({
   jd,
   resume,
@@ -185,6 +191,51 @@ ${recentMessagesText}
 
 当前问题：
 ${question}`;
+
+  return {
+    systemPrompt,
+    userPrompt,
+  };
+}
+
+export function buildResumeJdMatchPrompts({
+  resume,
+  jd,
+  analysis,
+}: ResumeJdMatchPromptInput) {
+  const analysisText = analysis ? JSON.stringify(analysis, null, 2) : "无";
+
+  const systemPrompt = `你是一名前端实习生和校招生求职场景下的岗位匹配分析助手。
+
+你的任务是根据用户提供的简历文本、可选的简历分析结果和岗位 JD，评估这份简历与目标岗位的匹配情况。
+
+要求：
+1. 评估视角必须以“前端实习/校招岗位”为准。
+2. 回答必须严格基于简历文本、已有分析结果和岗位 JD，不要编造简历中没有的信息。
+3. 输出必须为 JSON，不要返回 markdown，不要添加额外解释。
+4. matchScore 使用 0 到 100 的整数。
+5. matchedSkills、missingSkills、risks、suggestions 应尽量具体，便于用户快速修改简历表达。
+6. 文风要简洁、具体、可执行。
+7. JSON 格式必须严格如下：
+{
+  "matchScore": 0,
+  "summary": "...",
+  "matchedSkills": ["...", "..."],
+  "missingSkills": ["...", "..."],
+  "risks": ["...", "..."],
+  "suggestions": ["...", "..."]
+}`;
+
+  const userPrompt = `请基于下面信息分析这份简历与岗位 JD 的匹配情况。
+
+简历文本：
+${resume}
+
+已有简历分析结果：
+${analysisText}
+
+岗位 JD：
+${jd}`;
 
   return {
     systemPrompt,

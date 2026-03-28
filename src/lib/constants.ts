@@ -7,6 +7,8 @@ export const STORAGE_KEYS = {
   resumeDraft: "frontend-interview-copilot.resume-draft",
   resumeAnalysis: "frontend-interview-copilot.resume-analysis",
   resumeChat: "frontend-interview-copilot.resume-chat",
+  resumeJdDraft: "frontend-interview-copilot.resume-jd-draft",
+  resumeJdMatch: "frontend-interview-copilot.resume-jd-match",
 } as const;
 
 export const SETUP_FORM_LIMITS = {

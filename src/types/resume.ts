@@ -6,6 +6,15 @@ export type ResumeAnalysis = {
   keywords: string[];
 };
 
+export type ResumeJdMatch = {
+  matchScore: number;
+  summary: string;
+  matchedSkills: string[];
+  missingSkills: string[];
+  risks: string[];
+  suggestions: string[];
+};
+
 export type ResumeChatRole = "user" | "assistant";
 
 export type ResumeChatMessage = {
