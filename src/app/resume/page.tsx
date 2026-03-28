@@ -1,6 +1,6 @@
 "use client";
 
-import { type ChangeEvent, type FormEvent, useRef, useState } from "react";
+import { type ChangeEvent, type FormEvent, useEffect, useRef, useState } from "react";
 
 import { ResumeAnalysisResult } from "@/components/resume/resume-analysis-result";
 import { PageContainer } from "@/components/shared/page-container";
@@ -105,19 +105,33 @@ function getAnalyzeResumeErrorMessage(value: unknown) {
 
 export default function ResumePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [resumeText, setResumeText] = useState(() => readResumeDraft());
-  const [analysis, setAnalysis] = useState<ResumeAnalysis | null>(() =>
-    readResumeAnalysis(),
-  );
+  const [resumeText, setResumeText] = useState("");
+  const [analysis, setAnalysis] = useState<ResumeAnalysis | null>(null);
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [uploadError, setUploadError] = useState("");
   const [lastImportedFileName, setLastImportedFileName] = useState("");
+  const [isHydrated, setIsHydrated] = useState(false);
 
   const validationMessage = getResumeValidationMessage(resumeText);
   const shouldShowValidationError =
     Boolean(validationMessage) && (hasSubmitted || resumeText.trim().length > 0);
+  const shouldShowInitialLoadingState = isHydrated && isAnalyzing && !analysis;
+  const shouldShowRefreshingState = isHydrated && isAnalyzing && Boolean(analysis);
+  const shouldShowSubmitFailureState =
+    isHydrated && !isAnalyzing && !analysis && Boolean(submitError);
+  const shouldShowEmptyState =
+    isHydrated && !isAnalyzing && !analysis && !submitError;
+
+  useEffect(() => {
+    const nextResumeText = readResumeDraft();
+    const nextAnalysis = readResumeAnalysis();
+
+    setResumeText(nextResumeText);
+    setAnalysis(nextAnalysis);
+    setIsHydrated(true);
+  }, []);
 
   function applyResumeText(value: string) {
     const hasResumeChanged = value !== resumeText;
@@ -361,7 +375,7 @@ export default function ResumePage() {
           </form>
         </section>
 
-        {isAnalyzing && !analysis ? (
+        {shouldShowInitialLoadingState ? (
           <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
             <PageHeader
               title="正在分析简历"
@@ -373,13 +387,13 @@ export default function ResumePage() {
           </section>
         ) : null}
 
-        {isAnalyzing && analysis ? (
+        {shouldShowRefreshingState ? (
           <section className="rounded-3xl border border-zinc-200 bg-white px-5 py-4 text-sm text-zinc-600 shadow-sm">
             正在基于当前简历内容重新分析，完成后会覆盖本地缓存结果。
           </section>
         ) : null}
 
-        {!isAnalyzing && !analysis && submitError ? (
+        {shouldShowSubmitFailureState ? (
           <section className="rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
             <PageHeader
               title="分析失败"
@@ -388,7 +402,7 @@ export default function ResumePage() {
           </section>
         ) : null}
 
-        {!isAnalyzing && !analysis && !submitError ? (
+        {shouldShowEmptyState ? (
           <section className="rounded-3xl border border-dashed border-zinc-300 bg-white p-8 shadow-sm">
             <PageHeader
               title="还没有分析结果"
@@ -397,7 +411,9 @@ export default function ResumePage() {
           </section>
         ) : null}
 
-        {analysis ? <ResumeAnalysisResult analysis={analysis} /> : null}
+        {isHydrated && analysis ? (
+          <ResumeAnalysisResult analysis={analysis} />
+        ) : null}
       </div>
     </PageContainer>
   );
