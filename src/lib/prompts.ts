@@ -14,6 +14,15 @@ type GenerateQuestionsPromptInput = {
   jdMatch?: ResumeJdMatch | null;
 };
 
+type GenerateFollowUpPromptInput = {
+  jd: string;
+  resume: string;
+  mainQuestion: string;
+  mainAnswer: string;
+  analysis?: ResumeAnalysis | null;
+  jdMatch?: ResumeJdMatch | null;
+};
+
 type GenerateReportPromptInput = {
   jd: string;
   resume: string;
@@ -50,7 +59,7 @@ export function buildGenerateQuestionsPrompts({
   const jdMatchText = jdMatch ? JSON.stringify(jdMatch, null, 2) : "无";
   const systemPrompt = `你是一名负责前端实习生模拟面试的面试官。
 
-你的任务是根据用户提供的当前岗位 JD、当前简历原文，以及可选的结构化辅助摘要，生成 5 道适合前端实习或校招场景的中文面试题。
+你的任务是根据用户提供的当前岗位 JD、当前简历原文，以及可选的结构化辅助摘要，生成 5 道适合前端实习或校招场景的中文主问题。
 
 要求：
 1. 始终以当前岗位 JD 和当前简历原文为主输入。
@@ -92,6 +101,64 @@ ${jdMatchText}`;
   };
 }
 
+export function buildGenerateFollowUpPrompts({
+  jd,
+  resume,
+  mainQuestion,
+  mainAnswer,
+  analysis,
+  jdMatch,
+}: GenerateFollowUpPromptInput) {
+  const analysisText = analysis ? JSON.stringify(analysis, null, 2) : "无";
+  const jdMatchText = jdMatch ? JSON.stringify(jdMatch, null, 2) : "无";
+
+  const systemPrompt = `你是一名负责前端实习生模拟面试的面试官。
+
+你的任务是根据当前岗位 JD、当前简历原文、当前主问题和用户对该主问题的回答，判断是否有必要追加 1 道追问。
+
+要求：
+1. 追问必须只围绕当前主问题和当前回答展开，不要开启新话题。
+2. 只有当回答中存在模糊点、值得深挖的细节、明显风险点或表达不充分的地方时，才生成追问。
+3. 如果回答已经足够清晰完整，直接返回 null。
+4. 每次最多只生成 1 道追问。
+5. 追问难度应符合前端实习或校招场景，不要过难。
+6. 追问表述要简洁、自然、适合继续口头作答。
+7. 只返回 JSON，不要返回 markdown，不要添加额外解释。
+8. JSON 格式必须严格如下：
+{
+  "followUpQuestion": null
+}
+或
+{
+  "followUpQuestion": "..."
+}`;
+
+  const userPrompt = `请基于下面信息判断是否需要生成 1 道追问。
+
+当前岗位 JD：
+${jd}
+
+当前简历原文：
+${resume}
+
+可选的简历分析结果：
+${analysisText}
+
+可选的岗位匹配结果：
+${jdMatchText}
+
+当前主问题：
+${mainQuestion}
+
+用户对当前主问题的回答：
+${mainAnswer}`;
+
+  return {
+    systemPrompt,
+    userPrompt,
+  };
+}
+
 export function buildGenerateReportPrompts({
   jd,
   resume,
@@ -118,9 +185,10 @@ export function buildGenerateReportPrompts({
    - 简历风险点是否在回答中暴露
    - 与岗位差距相关的薄弱点
    - 更有针对性的改进建议
-8. 结论要具体，尽量结合回答质量、完整度、项目表达和工程实践意识。
-9. 只返回 JSON，不要返回 markdown，不要添加额外解释。
-10. JSON 格式必须严格如下：
+8. 当前面试题目中可能同时包含主问题和追问；如果出现追问，应结合主问题与追问的连续表现一起评估。
+9. 结论要具体，尽量结合回答质量、完整度、项目表达和工程实践意识。
+10. 只返回 JSON，不要返回 markdown，不要添加额外解释。
+11. JSON 格式必须严格如下：
 {
   "score": 0,
   "summary": "...",

@@ -35,6 +35,14 @@ function isSetupFormData(value: unknown): value is SetupFormData {
   return typeof data.jd === "string" && typeof data.resume === "string";
 }
 
+function isInterviewQuestionKind(value: unknown) {
+  return value === "main" || value === "follow_up";
+}
+
+function isFollowUpStatus(value: unknown) {
+  return value === "pending" || value === "generated" || value === "skipped";
+}
+
 function isInterviewQuestion(value: unknown): value is InterviewQuestion {
   if (!value || typeof value !== "object") {
     return false;
@@ -42,7 +50,36 @@ function isInterviewQuestion(value: unknown): value is InterviewQuestion {
 
   const data = value as Record<string, unknown>;
 
-  return typeof data.id === "string" && typeof data.question === "string";
+  if (typeof data.id !== "string" || typeof data.question !== "string") {
+    return false;
+  }
+
+  if (
+    "kind" in data &&
+    typeof data.kind !== "undefined" &&
+    !isInterviewQuestionKind(data.kind)
+  ) {
+    return false;
+  }
+
+  if (
+    "parentQuestionId" in data &&
+    typeof data.parentQuestionId !== "undefined" &&
+    data.parentQuestionId !== null &&
+    typeof data.parentQuestionId !== "string"
+  ) {
+    return false;
+  }
+
+  if (
+    "followUpStatus" in data &&
+    typeof data.followUpStatus !== "undefined" &&
+    !isFollowUpStatus(data.followUpStatus)
+  ) {
+    return false;
+  }
+
+  return true;
 }
 
 function isInterviewAnswer(value: unknown): value is InterviewAnswer {

@@ -47,6 +47,15 @@ type GenerateQuestionsErrorResponse = {
   message?: string;
 };
 
+function normalizeMainQuestions(questions: InterviewQuestion[]): InterviewQuestion[] {
+  return questions.map((question) => ({
+    ...question,
+    kind: "main",
+    parentQuestionId: null,
+    followUpStatus: "pending",
+  }));
+}
+
 function isStringArray(value: unknown) {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
@@ -407,7 +416,7 @@ export function AnalysisWorkspace() {
       }
 
       saveInterviewSession({
-        questions: result.questions,
+        questions: normalizeMainQuestions(result.questions),
         answers: [],
         currentQuestionIndex: 0,
       });

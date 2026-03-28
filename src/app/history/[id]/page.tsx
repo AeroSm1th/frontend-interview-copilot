@@ -42,6 +42,10 @@ function findAnswerByQuestionId(
   return answers.find((answer) => answer.questionId === questionId) ?? null;
 }
 
+function getQuestionKind(question: InterviewQuestion) {
+  return question.kind === "follow_up" ? "follow_up" : "main";
+}
+
 export default function HistoryDetailPage() {
   const params = useParams<{ id: string }>();
   const historyId = params.id;
@@ -106,6 +110,16 @@ export default function HistoryDetailPage() {
   }
 
   const answeredCount = getAnsweredCount(historyItem.answers);
+  const mainQuestionOrderMap = new Map<string, number>();
+  let nextMainQuestionOrder = 0;
+
+  historyItem.questions.forEach((question) => {
+    if (getQuestionKind(question) === "main") {
+      nextMainQuestionOrder += 1;
+      mainQuestionOrderMap.set(question.id, nextMainQuestionOrder);
+    }
+  });
+
   const reportSections = [
     {
       title: "优势",
@@ -224,6 +238,15 @@ export default function HistoryDetailPage() {
           {historyItem.questions.length > 0 ? (
             <div className="mt-5 space-y-4">
               {historyItem.questions.map((question, index) => {
+                const questionKind = getQuestionKind(question);
+                const mainQuestionOrder =
+                  questionKind === "main"
+                    ? mainQuestionOrderMap.get(question.id) ?? index + 1
+                    : null;
+                const parentMainOrder =
+                  question.parentQuestionId != null
+                    ? mainQuestionOrderMap.get(question.parentQuestionId) ?? null
+                    : null;
                 const matchedAnswer = findAnswerByQuestionId(
                   historyItem.answers,
                   question.id,
@@ -236,12 +259,23 @@ export default function HistoryDetailPage() {
                     className="rounded-2xl border border-zinc-100 bg-zinc-50/70 p-5"
                   >
                     <div className="flex flex-wrap items-center gap-3">
-                      <span className="inline-flex rounded-full bg-white px-3 py-1 text-xs font-medium text-zinc-500">
-                        题目 {index + 1}
-                      </span>
+                      {questionKind === "follow_up" ? (
+                        <span className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700">
+                          追问
+                        </span>
+                      ) : (
+                        <span className="inline-flex rounded-full bg-white px-3 py-1 text-xs font-medium text-zinc-500">
+                          主问题 {mainQuestionOrder}
+                        </span>
+                      )}
                       <span className="text-xs text-zinc-400">
                         questionId: {question.id}
                       </span>
+                      {questionKind === "follow_up" ? (
+                        <span className="text-xs text-zinc-400">
+                          关联主问题 {parentMainOrder ?? question.parentQuestionId ?? "未知"}
+                        </span>
+                      ) : null}
                     </div>
 
                     <div className="mt-4">

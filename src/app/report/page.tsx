@@ -51,10 +51,14 @@ export default function ReportPage() {
   const setupForm = useMemo(() => readSetupForm(), []);
   const interviewSession = useMemo(() => readInterviewSession(), []);
   const hasValidSetup = validateSetupForm(setupForm).isValid;
-  const questionCount =
+  const currentQuestions =
     interviewSession.questions.length > 0
-      ? interviewSession.questions.length
-      : MOCK_INTERVIEW_QUESTIONS.length;
+      ? interviewSession.questions
+      : MOCK_INTERVIEW_QUESTIONS;
+  const questionCount = currentQuestions.length;
+  const followUpCount = currentQuestions.filter(
+    (question) => question.kind === "follow_up",
+  ).length;
   const answeredCount = interviewSession.answers.filter((item) =>
     Boolean(item.answer.trim()),
   ).length;
@@ -92,10 +96,6 @@ export default function ReportPage() {
         resume: setupForm.resume,
         jd: setupForm.jd,
       });
-      const currentQuestions =
-        interviewSession.questions.length > 0
-          ? interviewSession.questions
-          : MOCK_INTERVIEW_QUESTIONS;
 
       const response = await fetch("/api/generate-report", {
         method: "POST",
@@ -278,6 +278,11 @@ export default function ReportPage() {
                 <p className="mt-1 text-lg font-semibold text-zinc-900">
                   {answeredCount} / {questionCount}
                 </p>
+                {followUpCount > 0 ? (
+                  <p className="mt-1 text-xs text-zinc-500">
+                    含 {followUpCount} 道追问
+                  </p>
+                ) : null}
               </div>
               <div className="rounded-2xl bg-zinc-50 px-4 py-3">
                 <p className="text-xs text-zinc-500">总回答字数</p>

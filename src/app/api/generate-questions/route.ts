@@ -65,6 +65,14 @@ function extractJsonText(content: string) {
   return trimmedContent.slice(startIndex, endIndex + 1);
 }
 
+function isInterviewQuestionKind(value: unknown) {
+  return value === "main" || value === "follow_up";
+}
+
+function isFollowUpStatus(value: unknown) {
+  return value === "pending" || value === "generated" || value === "skipped";
+}
+
 function isInterviewQuestion(value: unknown): value is InterviewQuestion {
   if (!value || typeof value !== "object") {
     return false;
@@ -72,7 +80,36 @@ function isInterviewQuestion(value: unknown): value is InterviewQuestion {
 
   const data = value as Record<string, unknown>;
 
-  return typeof data.id === "string" && typeof data.question === "string";
+  if (typeof data.id !== "string" || typeof data.question !== "string") {
+    return false;
+  }
+
+  if (
+    "kind" in data &&
+    typeof data.kind !== "undefined" &&
+    !isInterviewQuestionKind(data.kind)
+  ) {
+    return false;
+  }
+
+  if (
+    "parentQuestionId" in data &&
+    typeof data.parentQuestionId !== "undefined" &&
+    data.parentQuestionId !== null &&
+    typeof data.parentQuestionId !== "string"
+  ) {
+    return false;
+  }
+
+  if (
+    "followUpStatus" in data &&
+    typeof data.followUpStatus !== "undefined" &&
+    !isFollowUpStatus(data.followUpStatus)
+  ) {
+    return false;
+  }
+
+  return true;
 }
 
 function parseQuestionsFromContent(content: string): InterviewQuestion[] {
@@ -98,7 +135,10 @@ function parseQuestionsFromContent(content: string): InterviewQuestion[] {
     throw new Error("模型返回的 questions 数量不是 5。");
   }
 
-  return data.questions;
+  return data.questions.map((question) => ({
+    id: question.id,
+    question: question.question,
+  }));
 }
 
 export async function POST(request: Request) {
