@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { AnalysisChatController } from "@/components/analysis/analysis-chat-controller";
 import { ResumeAnalysisResult } from "@/components/resume/resume-analysis-result";
-import { ResumeChatPanel } from "@/components/resume/resume-chat-panel";
 import { ResumeJdMatchPanel } from "@/components/resume/resume-jd-match-panel";
 import { PageContainer } from "@/components/shared/page-container";
 import { PageHeader } from "@/components/shared/page-header";
@@ -15,16 +15,13 @@ import { createSourceSignature } from "@/lib/source-signature";
 import {
   clearInterviewReport,
   clearInterviewSession,
-  clearResumeChatMessages,
   clearResumeJdMatch,
   readResumeAnalysis,
-  readResumeChatMessages,
   readResumeDraft,
   readResumeJdDraft,
   readResumeJdMatch,
   saveInterviewSession,
   saveResumeAnalysisCache,
-  saveResumeChatMessages,
   saveResumeDraft,
   saveResumeJdDraft,
   saveResumeJdMatchCache,
@@ -32,32 +29,11 @@ import {
 } from "@/lib/storage";
 import { validateSetupForm } from "@/lib/validation";
 import type { InterviewQuestion } from "@/types/interview";
-import type {
-  ResumeAnalysis,
-  ResumeChatMessage,
-  ResumeJdMatch,
-} from "@/types/resume";
+import type { ResumeAnalysis, ResumeJdMatch } from "@/types/resume";
 
 type AnalyzeResumeErrorResponse = {
   message?: string;
 };
-
-type ResumeChatErrorResponse = {
-  message?: string;
-};
-
-type ResumeChatStreamEvent =
-  | {
-      type: "delta";
-      content: string;
-    }
-  | {
-      type: "done";
-    }
-  | {
-      type: "error";
-      message: string;
-    };
 
 type AnalyzeResumeMatchErrorResponse = {
   message?: string;
@@ -128,19 +104,6 @@ function getAnalyzeResumeErrorMessage(value: unknown) {
   return "简历分析失败，请稍后重试。";
 }
 
-function getResumeChatErrorMessage(value: unknown) {
-  if (
-    value &&
-    typeof value === "object" &&
-    "message" in value &&
-    typeof value.message === "string"
-  ) {
-    return value.message;
-  }
-
-  return "简历对话失败，请稍后重试。";
-}
-
 function getResumeMatchErrorMessage(value: unknown) {
   if (
     value &&
@@ -162,72 +125,6 @@ function getGenerateQuestionsErrorMessage(
   }
 
   return "生成题目失败，请稍后重试。";
-}
-
-function createResumeChatMessage(
-  role: ResumeChatMessage["role"],
-  content: string,
-): ResumeChatMessage {
-  const fallbackId = `${role}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
-  return {
-    id: globalThis.crypto?.randomUUID?.() ?? fallbackId,
-    role,
-    content,
-    createdAt: new Date().toISOString(),
-  };
-}
-
-function parseResumeChatStreamEvent(value: string): ResumeChatStreamEvent | null {
-  const dataLine = value
-    .split("\n")
-    .find((line) => line.startsWith("data: "));
-
-  if (!dataLine) {
-    return null;
-  }
-
-  try {
-    const parsedValue: unknown = JSON.parse(dataLine.slice(6));
-
-    if (!parsedValue || typeof parsedValue !== "object") {
-      return null;
-    }
-
-    if ("type" in parsedValue && parsedValue.type === "done") {
-      return {
-        type: "done",
-      };
-    }
-
-    if (
-      "type" in parsedValue &&
-      parsedValue.type === "delta" &&
-      "content" in parsedValue &&
-      typeof parsedValue.content === "string"
-    ) {
-      return {
-        type: "delta",
-        content: parsedValue.content,
-      };
-    }
-
-    if (
-      "type" in parsedValue &&
-      parsedValue.type === "error" &&
-      "message" in parsedValue &&
-      typeof parsedValue.message === "string"
-    ) {
-      return {
-        type: "error",
-        message: parsedValue.message,
-      };
-    }
-  } catch {
-    return null;
-  }
-
-  return null;
 }
 
 function getPreviewText(value: string, maxLength = 220) {
@@ -317,14 +214,9 @@ export function AnalysisWorkspace() {
   const [submitError, setSubmitError] = useState("");
   const [jdMatchError, setJdMatchError] = useState("");
   const [interviewStartError, setInterviewStartError] = useState("");
-  const [chatMessages, setChatMessages] = useState<ResumeChatMessage[]>([]);
-  const [chatInput, setChatInput] = useState("");
-  const [chatError, setChatError] = useState("");
   const [isChatting, setIsChatting] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
-  const [isChatSidebarCollapsed, setIsChatSidebarCollapsed] = useState(false);
-  const [isChatSheetOpen, setIsChatSheetOpen] = useState(false);
-  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
+  const [chatResetSignal, setChatResetSignal] = useState(0);
 
   const resumeValidationMessage = getResumeValidationMessage(resumeText);
   const jdValidationMessage = getJdValidationMessage(jdText);
@@ -342,7 +234,6 @@ export function AnalysisWorkspace() {
   const shouldShowEmptyState =
     isHydrated && !isAnalyzing && !analysis && !submitError;
   const shouldShowJdMatchPanel = isHydrated && hasValidResumeDraft;
-  const shouldShowChatPanel = isHydrated && canUseChat;
   const shouldShowNextStepCard = isHydrated && hasValidResumeDraft;
 
   useEffect(() => {
@@ -350,17 +241,10 @@ export function AnalysisWorkspace() {
     const nextAnalysis = readResumeAnalysis();
     const nextJdText = readResumeJdDraft();
     const nextJdMatch = readResumeJdMatch();
-    const nextChatMessages = readResumeChatMessages();
 
     setResumeText(nextResumeText);
     setAnalysis(nextAnalysis);
     setJdText(nextJdText);
-
-    if (nextResumeText.trim().length > 0 && nextAnalysis) {
-      setChatMessages(nextChatMessages);
-    } else {
-      clearResumeChatMessages();
-    }
 
     if (nextResumeText.trim().length > 0 && nextJdText.trim().length > 0 && nextJdMatch) {
       setJdMatch(nextJdMatch);
@@ -370,24 +254,6 @@ export function AnalysisWorkspace() {
 
     setIsHydrated(true);
   }, []);
-
-  useEffect(() => {
-    if (shouldShowChatPanel) {
-      return;
-    }
-
-    setIsChatSidebarCollapsed(false);
-    setIsChatSheetOpen(false);
-    setStreamingMessageId(null);
-  }, [shouldShowChatPanel]);
-
-  function clearResumeChatState() {
-    setChatMessages([]);
-    setChatInput("");
-    setChatError("");
-    setStreamingMessageId(null);
-    clearResumeChatMessages();
-  }
 
   async function handleAnalyze() {
     setSubmitError("");
@@ -426,171 +292,13 @@ export function AnalysisWorkspace() {
         result,
         sourceSignature: createSourceSignature(resumeText),
       });
-      clearResumeChatState();
+      setChatResetSignal((currentValue) => currentValue + 1);
     } catch (error) {
       setSubmitError(
         error instanceof Error ? error.message : "简历分析失败，请稍后重试。",
       );
     } finally {
       setIsAnalyzing(false);
-    }
-  }
-
-  function handleChatInputChange(value: string) {
-    setChatInput(value);
-
-    if (chatError) {
-      setChatError("");
-    }
-  }
-
-  function handleChatShortcutClick(question: string) {
-    setChatInput(question);
-
-    if (chatError) {
-      setChatError("");
-    }
-  }
-
-  async function handleChatSend() {
-    const question = chatInput.trim();
-
-    if (!question) {
-      return;
-    }
-
-    if (!analysis || resumeText.trim().length === 0) {
-      setChatError("请先提供简历内容并完成简历分析。");
-      return;
-    }
-
-    const previousMessages = chatMessages;
-    const userMessage = createResumeChatMessage("user", question);
-    const assistantPlaceholder = createResumeChatMessage("assistant", "");
-
-    try {
-      setIsChatting(true);
-      setChatError("");
-      setChatInput("");
-      setStreamingMessageId(assistantPlaceholder.id);
-      setChatMessages([
-        ...previousMessages,
-        userMessage,
-        assistantPlaceholder,
-      ]);
-
-      const response = await fetch("/api/resume-chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          resume: resumeText,
-          analysis,
-          messages: previousMessages,
-          question,
-        }),
-      });
-
-      if (!response.ok) {
-        const result = (await response.json()) as ResumeChatErrorResponse;
-
-        throw new Error(getResumeChatErrorMessage(result));
-      }
-
-      if (!response.body) {
-        throw new Error("未收到可读取的聊天响应流，请稍后重试。");
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let assistantReply = "";
-
-      while (true) {
-        const { value, done } = await reader.read();
-
-        if (done) {
-          break;
-        }
-
-        buffer += decoder.decode(value, { stream: true });
-        const events = buffer.split("\n\n");
-        buffer = events.pop() ?? "";
-
-        for (const eventChunk of events) {
-          const event = parseResumeChatStreamEvent(eventChunk);
-
-          if (!event) {
-            continue;
-          }
-
-          if (event.type === "error") {
-            throw new Error(event.message);
-          }
-
-          if (event.type === "delta") {
-            assistantReply += event.content;
-            setChatMessages([
-              ...previousMessages,
-              userMessage,
-              {
-                ...assistantPlaceholder,
-                content: assistantReply,
-              },
-            ]);
-          }
-        }
-      }
-
-      buffer += decoder.decode();
-
-      if (buffer.trim()) {
-        const trailingEvents = buffer.split("\n\n");
-
-        for (const eventChunk of trailingEvents) {
-          const event = parseResumeChatStreamEvent(eventChunk);
-
-          if (!event) {
-            continue;
-          }
-
-          if (event.type === "error") {
-            throw new Error(event.message);
-          }
-
-          if (event.type === "delta") {
-            assistantReply += event.content;
-          }
-        }
-      }
-
-      const finalReply = assistantReply.trim();
-
-      if (!finalReply) {
-        throw new Error("AI 没有返回有效回复，请稍后重试。");
-      }
-
-      const nextMessages = [
-        ...previousMessages,
-        userMessage,
-        {
-          ...assistantPlaceholder,
-          content: finalReply,
-        },
-      ];
-
-      setChatMessages(nextMessages);
-      saveResumeChatMessages(nextMessages);
-    } catch (error) {
-      setChatMessages(previousMessages);
-      setChatInput(question);
-      setChatError(
-        error instanceof Error ? error.message : "简历对话失败，请稍后重试。",
-      );
-    } finally {
-      setStreamingMessageId(null);
-      setIsChatting(false);
     }
   }
 
@@ -713,18 +421,6 @@ export function AnalysisWorkspace() {
     }
   }
 
-  function handleToggleChatSidebar() {
-    setIsChatSidebarCollapsed((currentValue) => !currentValue);
-  }
-
-  function handleOpenChatSheet() {
-    setIsChatSheetOpen(true);
-  }
-
-  function handleCloseChatSheet() {
-    setIsChatSheetOpen(false);
-  }
-
   if (!isHydrated) {
     return (
       <PageContainer className="flex items-center">
@@ -830,190 +526,140 @@ export function AnalysisWorkspace() {
           </div>
         </section>
 
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,380px)]">
-          <div className="min-w-0 space-y-6">
+        <div className="min-w-0 space-y-6">
+          <section className="rounded-[32px] border border-zinc-200 bg-white p-6 shadow-sm">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="space-y-2">
+                <h2 className="text-base font-semibold text-zinc-900">简历分析</h2>
+                <p className="text-sm leading-7 text-zinc-600">
+                  基于当前 Resume 摘要生成结构化分析结果，帮助你先梳理优势、风险点、关键词和改进建议。
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void handleAnalyze()}
+                disabled={isWorkspaceBusy}
+                className="inline-flex items-center justify-center rounded-xl bg-zinc-900 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:text-zinc-500"
+              >
+                {isAnalyzing ? "正在分析..." : analysis ? "重新分析" : "开始分析"}
+              </button>
+            </div>
+
+            {submitError ? (
+              <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-600">
+                {submitError}
+              </div>
+            ) : null}
+          </section>
+
+          {shouldShowInitialLoadingState ? (
+            <section className="rounded-[32px] border border-zinc-200 bg-white p-6 shadow-sm">
+              <PageHeader
+                title="正在分析简历"
+                description="系统正在结合前端实习和校招场景提炼你的优势、风险点和改进建议，请稍候。"
+              />
+              <div className="mt-6 rounded-2xl bg-zinc-50 px-5 py-4 text-sm text-zinc-600">
+                正在分析简历...
+              </div>
+            </section>
+          ) : null}
+
+          {shouldShowRefreshingState ? (
+            <section className="rounded-[32px] border border-zinc-200 bg-white px-5 py-4 text-sm text-zinc-600 shadow-sm">
+              正在基于当前 Resume 重新分析，完成后会覆盖本地缓存结果。
+            </section>
+          ) : null}
+
+          {shouldShowSubmitFailureState ? (
+            <section className="rounded-[32px] border border-zinc-200 bg-white p-8 shadow-sm">
+              <PageHeader
+                title="分析失败"
+                description="这次没有成功拿到结构化简历分析结果。你可以保留当前上下文并再次发起分析。"
+              />
+            </section>
+          ) : null}
+
+          {shouldShowEmptyState ? (
+            <section className="rounded-[32px] border border-dashed border-zinc-300 bg-white p-8 shadow-sm">
+              <PageHeader
+                title="还没有分析结果"
+                description="点击上方“开始分析”后，这里会展示总结、优势、风险点、改进建议和关键词。"
+              />
+            </section>
+          ) : null}
+
+          {isHydrated && analysis ? (
+            <ResumeAnalysisResult analysis={analysis} />
+          ) : null}
+
+          {shouldShowJdMatchPanel ? (
+            <ResumeJdMatchPanel
+              jdText={jdText}
+              match={jdMatch}
+              errorMessage={jdMatchError}
+              validationMessage={jdValidationMessage}
+              isMatching={isMatching}
+              disabled={isAnalyzing || isChatting || isGeneratingQuestions}
+              onSubmit={() => void handleJdMatchSubmit()}
+            />
+          ) : null}
+
+          {shouldShowNextStepCard ? (
             <section className="rounded-[32px] border border-zinc-200 bg-white p-6 shadow-sm">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div className="space-y-2">
-                  <h2 className="text-base font-semibold text-zinc-900">简历分析</h2>
+                  <h2 className="text-base font-semibold text-zinc-900">
+                    下一步：开始模拟面试
+                  </h2>
                   <p className="text-sm leading-7 text-zinc-600">
-                    基于当前 Resume 摘要生成结构化分析结果，帮助你先梳理优势、风险点、关键词和改进建议。
+                    这里继续复用现有兼容逻辑：校验 JD 和简历、写入 setupForm、生成题目并初始化 interviewSession，然后进入 /interview。
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => void handleAnalyze()}
-                  disabled={isWorkspaceBusy}
-                  className="inline-flex items-center justify-center rounded-xl bg-zinc-900 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:text-zinc-500"
-                >
-                  {isAnalyzing ? "正在分析..." : analysis ? "重新分析" : "开始分析"}
-                </button>
+
+                {hasValidJdDraft ? (
+                  <button
+                    type="button"
+                    onClick={() => void handleStartInterview()}
+                    disabled={isWorkspaceBusy}
+                    className="inline-flex items-center justify-center rounded-xl bg-zinc-900 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:text-zinc-500"
+                  >
+                    {isGeneratingQuestions ? "正在生成题目..." : "开始模拟面试"}
+                  </button>
+                ) : (
+                  <Link
+                    href="/resume"
+                    className="inline-flex items-center justify-center rounded-xl border border-zinc-200 px-5 py-3 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50"
+                  >
+                    去 /resume 补充 JD
+                  </Link>
+                )}
               </div>
 
-              {submitError ? (
+              {!hasValidJdDraft ? (
+                <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-700">
+                  {hasJdDraft
+                    ? jdValidationMessage
+                    : "当前还没有目标岗位 JD。分析页不再直接补录 JD，需要回到 /resume 后再开始模拟面试。"}
+                </div>
+              ) : null}
+
+              {interviewStartError ? (
                 <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-600">
-                  {submitError}
+                  {interviewStartError}
                 </div>
               ) : null}
             </section>
-
-            {shouldShowInitialLoadingState ? (
-              <section className="rounded-[32px] border border-zinc-200 bg-white p-6 shadow-sm">
-                <PageHeader
-                  title="正在分析简历"
-                  description="系统正在结合前端实习和校招场景提炼你的优势、风险点和改进建议，请稍候。"
-                />
-                <div className="mt-6 rounded-2xl bg-zinc-50 px-5 py-4 text-sm text-zinc-600">
-                  正在分析简历...
-                </div>
-              </section>
-            ) : null}
-
-            {shouldShowRefreshingState ? (
-              <section className="rounded-[32px] border border-zinc-200 bg-white px-5 py-4 text-sm text-zinc-600 shadow-sm">
-                正在基于当前 Resume 重新分析，完成后会覆盖本地缓存结果。
-              </section>
-            ) : null}
-
-            {shouldShowSubmitFailureState ? (
-              <section className="rounded-[32px] border border-zinc-200 bg-white p-8 shadow-sm">
-                <PageHeader
-                  title="分析失败"
-                  description="这次没有成功拿到结构化简历分析结果。你可以保留当前上下文并再次发起分析。"
-                />
-              </section>
-            ) : null}
-
-            {shouldShowEmptyState ? (
-              <section className="rounded-[32px] border border-dashed border-zinc-300 bg-white p-8 shadow-sm">
-                <PageHeader
-                  title="还没有分析结果"
-                  description="点击上方“开始分析”后，这里会展示总结、优势、风险点、改进建议和关键词。"
-                />
-              </section>
-            ) : null}
-
-            {isHydrated && analysis ? (
-              <ResumeAnalysisResult analysis={analysis} />
-            ) : null}
-
-            {shouldShowJdMatchPanel ? (
-              <ResumeJdMatchPanel
-                jdText={jdText}
-                match={jdMatch}
-                errorMessage={jdMatchError}
-                validationMessage={jdValidationMessage}
-                isMatching={isMatching}
-                disabled={isAnalyzing || isChatting || isGeneratingQuestions}
-                onSubmit={() => void handleJdMatchSubmit()}
-              />
-            ) : null}
-
-            {shouldShowNextStepCard ? (
-              <section className="rounded-[32px] border border-zinc-200 bg-white p-6 shadow-sm">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="space-y-2">
-                    <h2 className="text-base font-semibold text-zinc-900">
-                      下一步：开始模拟面试
-                    </h2>
-                    <p className="text-sm leading-7 text-zinc-600">
-                      这里继续复用现有兼容逻辑：校验 JD 和简历、写入 setupForm、生成题目并初始化 interviewSession，然后进入 /interview。
-                    </p>
-                  </div>
-
-                  {hasValidJdDraft ? (
-                    <button
-                      type="button"
-                      onClick={() => void handleStartInterview()}
-                      disabled={isWorkspaceBusy}
-                      className="inline-flex items-center justify-center rounded-xl bg-zinc-900 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:text-zinc-500"
-                    >
-                      {isGeneratingQuestions ? "正在生成题目..." : "开始模拟面试"}
-                    </button>
-                  ) : (
-                    <Link
-                      href="/resume"
-                      className="inline-flex items-center justify-center rounded-xl border border-zinc-200 px-5 py-3 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50"
-                    >
-                      去 /resume 补充 JD
-                    </Link>
-                  )}
-                </div>
-
-                {!hasValidJdDraft ? (
-                  <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-700">
-                    {hasJdDraft
-                      ? jdValidationMessage
-                      : "当前还没有目标岗位 JD。分析页不再直接补录 JD，需要回到 /resume 后再开始模拟面试。"}
-                  </div>
-                ) : null}
-
-                {interviewStartError ? (
-                  <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-600">
-                    {interviewStartError}
-                  </div>
-                ) : null}
-              </section>
-            ) : null}
-          </div>
-
-          {shouldShowChatPanel ? (
-            <aside className="hidden xl:block">
-              <div className="sticky top-8 h-[calc(100vh-4rem)] min-h-[560px]">
-                <ResumeChatPanel
-                  messages={chatMessages}
-                  inputValue={chatInput}
-                  errorMessage={chatError}
-                  isSending={isChatting}
-                  disabled={isAnalyzing || isMatching || isGeneratingQuestions}
-                  isCollapsed={isChatSidebarCollapsed}
-                  streamingMessageId={streamingMessageId}
-                  onInputChange={handleChatInputChange}
-                  onSend={() => void handleChatSend()}
-                  onShortcutClick={handleChatShortcutClick}
-                  onToggleCollapse={handleToggleChatSidebar}
-                />
-              </div>
-            </aside>
           ) : null}
         </div>
 
-        {shouldShowChatPanel && !isChatSheetOpen ? (
-          <button
-            type="button"
-            onClick={handleOpenChatSheet}
-            className="fixed bottom-6 right-4 z-30 inline-flex items-center justify-center rounded-full bg-zinc-900 px-5 py-3 text-sm font-medium text-white shadow-lg transition-colors hover:bg-zinc-700 xl:hidden"
-          >
-            {isChatting ? "正在生成回复..." : "打开简历聊天"}
-          </button>
-        ) : null}
-
-        {shouldShowChatPanel && isChatSheetOpen ? (
-          <div className="fixed inset-0 z-40 xl:hidden">
-            <button
-              type="button"
-              aria-label="关闭简历聊天"
-              onClick={handleCloseChatSheet}
-              className="absolute inset-0 bg-zinc-950/45 backdrop-blur-[2px]"
-            />
-
-            <div className="absolute inset-x-0 bottom-0 top-20">
-              <ResumeChatPanel
-                mode="sheet"
-                messages={chatMessages}
-                inputValue={chatInput}
-                errorMessage={chatError}
-                isSending={isChatting}
-                disabled={isAnalyzing || isMatching || isGeneratingQuestions}
-                streamingMessageId={streamingMessageId}
-                onInputChange={handleChatInputChange}
-                onSend={() => void handleChatSend()}
-                onShortcutClick={handleChatShortcutClick}
-                onClose={handleCloseChatSheet}
-              />
-            </div>
-          </div>
-        ) : null}
+        <AnalysisChatController
+          resumeText={resumeText}
+          analysis={analysis}
+          disabled={isAnalyzing || isMatching || isGeneratingQuestions}
+          canUseChat={canUseChat}
+          chatResetSignal={chatResetSignal}
+          onChattingChange={setIsChatting}
+        />
       </div>
     </PageContainer>
   );
