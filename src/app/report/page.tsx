@@ -77,7 +77,7 @@ export default function ReportPage() {
     clearSetupForm();
     clearInterviewSession();
     clearInterviewReport();
-    router.push("/setup");
+    router.push("/resume");
   }
 
   async function generateReport() {
@@ -164,14 +164,14 @@ export default function ReportPage() {
         <section className="mx-auto flex w-full max-w-2xl flex-col gap-6 rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
           <PageHeader
             title="还没有可展示的报告"
-            description="请先完成设置和本地 mock 面试流程，随后这里会展示一份模拟复盘报告。"
+            description="请先完成分析和本地模拟面试流程，随后这里会展示一份模拟复盘报告。"
           />
           <div className="flex flex-col gap-3 sm:flex-row">
             <Link
-              href="/setup"
+              href="/analysis"
               className="inline-flex items-center justify-center rounded-xl bg-zinc-900 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-zinc-700"
             >
-              返回设置页
+              返回分析页
             </Link>
             <button
               type="button"
@@ -257,7 +257,7 @@ export default function ReportPage() {
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
         <PageHeader
           title="面试复盘报告"
-          description="这是一份基于岗位信息和整轮问答生成的真实 AI 复盘报告，内容会优先读取本地缓存。"
+          description="这是一份基于岗位信息和整轮问答生成的真实 AI 复盘报告，内容会优先读取本地缓存。第一阶段只重构信息架构，不影响现有报告与历史能力。"
         />
 
         <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">

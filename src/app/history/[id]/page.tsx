@@ -94,7 +94,7 @@ export default function HistoryDetailPage() {
               返回历史记录
             </Link>
             <Link
-              href="/setup"
+              href="/resume"
               className="inline-flex items-center justify-center rounded-xl border border-zinc-200 px-5 py-3 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50"
             >
               开始新的模拟

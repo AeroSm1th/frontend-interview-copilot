@@ -30,11 +30,11 @@ const capabilitySections = [
 const flowSteps = [
   {
     title: "Resume",
-    description: "整理简历内容，导入或输入文本，先看 AI 分析与 JD 匹配。",
+    description: "先整理简历内容，导入或输入一份可继续复用的本地草稿。",
   },
   {
-    title: "Setup",
-    description: "确认目标岗位 JD 和简历信息，准备开始本轮模拟面试。",
+    title: "Analysis",
+    description: "在分析工作台里做简历分析、JD 匹配、简历聊天，并准备开始模拟面试。",
   },
   {
     title: "Interview",
@@ -52,18 +52,18 @@ const flowSteps = [
 
 const quickLinks = [
   {
-    title: "开始模拟面试",
-    description: "直接进入设置页，基于岗位 JD 和简历生成 5 道前端题。",
-    href: "/setup",
-    actionLabel: "进入 /setup",
+    title: "从主流程开始",
+    description: "先进入简历页准备草稿，再沿着 /resume -> /analysis -> /interview 前进。",
+    href: "/resume",
+    actionLabel: "进入 /resume",
     accentClass: "bg-zinc-900 text-white border-zinc-900",
     actionClass: "text-white/90",
   },
   {
-    title: "先优化简历",
-    description: "先做简历分析、JD 匹配和简历聊天，再把内容带入模拟面试。",
-    href: "/resume",
-    actionLabel: "进入 /resume",
+    title: "打开分析工作台",
+    description: "如果本地已经有简历草稿，可以直接去 /analysis 做分析、JD 匹配和聊天。",
+    href: "/analysis",
+    actionLabel: "进入 /analysis",
     accentClass: "bg-white text-zinc-900 border-zinc-200",
     actionClass: "text-zinc-500",
   },
@@ -96,7 +96,7 @@ export default function Home() {
 
             <PageHeader
               title="一个面向前端求职准备的 AI 面试陪练与简历辅助产品"
-              description="你可以先分析简历、做 JD 匹配和简历聊天，再进入模拟面试，最后查看 AI 复盘报告与本地历史记录。首页只负责介绍产品和提供入口，不改变现有业务流程。"
+              description="现在的主链路会先准备简历草稿，再进入分析工作台完成 JD 匹配和聊天，随后开始模拟面试，最后查看 AI 复盘报告与本地历史记录。首页只负责介绍产品和提供入口。"
               align="center"
             />
 
@@ -140,16 +140,16 @@ export default function Home() {
 
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
               <Link
-                href="/setup"
+                href="/resume"
                 className="inline-flex items-center justify-center rounded-xl bg-zinc-900 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-zinc-700"
               >
-                开始模拟面试
+                从主流程开始
               </Link>
               <Link
-                href="/resume"
+                href="/analysis"
                 className="inline-flex items-center justify-center rounded-xl border border-zinc-200 px-5 py-3 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50"
               >
-                先优化简历
+                打开分析工作台
               </Link>
               <Link
                 href="/history"
@@ -266,7 +266,7 @@ export default function Home() {
                     <h3 className="text-lg font-semibold">{link.title}</h3>
                     <p
                       className={`mt-2 text-sm leading-7 ${
-                        link.href === "/setup" ? "text-zinc-300" : "text-zinc-600"
+                        link.href === "/resume" ? "text-zinc-300" : "text-zinc-600"
                       }`}
                     >
                       {link.description}

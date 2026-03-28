@@ -117,14 +117,14 @@ export default function InterviewPage() {
         <section className="mx-auto flex w-full max-w-2xl flex-col gap-6 rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
           <PageHeader
             title="还没有可用的面试信息"
-            description="请先返回设置页填写岗位 JD 和简历内容，再开始本地 mock 面试流程。"
+            description="请先返回分析页确认岗位 JD 和简历内容，再开始新的模拟面试主流程。"
           />
           <div className="flex flex-col gap-3 sm:flex-row">
             <Link
-              href="/setup"
+              href="/analysis"
               className="inline-flex items-center justify-center rounded-xl bg-zinc-900 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-zinc-700"
             >
-              返回设置页
+              返回分析页
             </Link>
             <Link
               href="/"

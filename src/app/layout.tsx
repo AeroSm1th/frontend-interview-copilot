@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { WorkspaceShell } from "@/components/shared/workspace-shell";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -13,7 +14,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN" className="h-full antialiased">
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <WorkspaceShell>{children}</WorkspaceShell>
+      </body>
     </html>
   );
 }

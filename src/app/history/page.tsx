@@ -75,7 +75,7 @@ export default function HistoryPage() {
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
             <Link
-              href="/setup"
+              href="/resume"
               className="inline-flex items-center justify-center rounded-xl bg-zinc-900 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-zinc-700"
             >
               开始新的模拟
@@ -113,7 +113,7 @@ export default function HistoryPage() {
 
             <div className="flex flex-col gap-3 sm:flex-row">
               <Link
-                href="/setup"
+                href="/resume"
                 className="inline-flex items-center justify-center rounded-xl border border-zinc-200 px-5 py-3 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50"
               >
                 开始新的模拟

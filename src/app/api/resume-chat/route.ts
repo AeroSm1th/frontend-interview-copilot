@@ -12,6 +12,19 @@ type ResumeChatRequestBody = {
   question: string;
 };
 
+type ResumeChatStreamEvent =
+  | {
+      type: "delta";
+      content: string;
+    }
+  | {
+      type: "done";
+    }
+  | {
+      type: "error";
+      message: string;
+    };
+
 function isStringArray(value: unknown) {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
@@ -96,6 +109,10 @@ function validateResumeChatInput(body: Partial<ResumeChatRequestBody>) {
   };
 }
 
+function createStreamEventPayload(event: ResumeChatStreamEvent) {
+  return `data: ${JSON.stringify(event)}\n\n`;
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as Partial<ResumeChatRequestBody>;
@@ -119,6 +136,7 @@ export async function POST(request: Request) {
     });
     const completion = await client.chat.completions.create({
       model: process.env.AI_MODEL ?? "qwen-turbo",
+      stream: true,
       messages: [
         {
           role: "system",
@@ -130,21 +148,77 @@ export async function POST(request: Request) {
         },
       ],
     });
-    const content = completion.choices[0]?.message?.content;
-    const reply = typeof content === "string" ? content.trim() : "";
 
-    if (!reply) {
-      return NextResponse.json(
-        {
-          message: "模型没有返回有效的简历对话内容。",
+    const encoder = new TextEncoder();
+
+    return new Response(
+      new ReadableStream({
+        async start(controller) {
+          let hasContent = false;
+
+          try {
+            for await (const chunk of completion) {
+              const content = chunk.choices[0]?.delta?.content;
+
+              if (typeof content !== "string" || content.length === 0) {
+                continue;
+              }
+
+              hasContent = true;
+              controller.enqueue(
+                encoder.encode(
+                  createStreamEventPayload({
+                    type: "delta",
+                    content,
+                  }),
+                ),
+              );
+            }
+
+            if (!hasContent) {
+              controller.enqueue(
+                encoder.encode(
+                  createStreamEventPayload({
+                    type: "error",
+                    message: "模型没有返回有效的简历对话内容。",
+                  }),
+                ),
+              );
+              return;
+            }
+
+            controller.enqueue(
+              encoder.encode(
+                createStreamEventPayload({
+                  type: "done",
+                }),
+              ),
+            );
+          } catch (error) {
+            const message =
+              error instanceof Error ? error.message : "简历对话时发生未知错误。";
+
+            controller.enqueue(
+              encoder.encode(
+                createStreamEventPayload({
+                  type: "error",
+                  message,
+                }),
+              ),
+            );
+          } finally {
+            controller.close();
+          }
         },
-        { status: 500 },
-      );
-    }
-
-    return NextResponse.json({
-      reply,
-    });
+      }),
+      {
+        headers: {
+          "Content-Type": "text/event-stream; charset=utf-8",
+          "Cache-Control": "no-cache, no-transform",
+          Connection: "keep-alive",
+        },
+      },
+    );
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "简历对话时发生未知错误。";

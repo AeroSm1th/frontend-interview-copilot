@@ -1,0 +1,172 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import type { ReactNode } from "react";
+
+type WorkspaceShellProps = {
+  children: ReactNode;
+};
+
+const NAV_ITEMS = [
+  {
+    href: "/",
+    label: "首页",
+    description: "产品说明与入口",
+    match: (pathname: string) => pathname === "/",
+  },
+  {
+    href: "/resume",
+    label: "简历",
+    description: "输入或导入简历",
+    match: (pathname: string) => pathname === "/resume",
+  },
+  {
+    href: "/analysis",
+    label: "分析",
+    description: "分析、JD、聊天、开始面试",
+    match: (pathname: string) => pathname === "/analysis" || pathname === "/setup",
+  },
+  {
+    href: "/history",
+    label: "历史",
+    description: "查看本地记录",
+    match: (pathname: string) => pathname === "/history" || pathname.startsWith("/history/"),
+  },
+] as const;
+
+const WORKFLOW_STEPS = [
+  {
+    label: "Resume",
+    match: (pathname: string) => pathname === "/resume",
+  },
+  {
+    label: "Analysis",
+    match: (pathname: string) => pathname === "/analysis" || pathname === "/setup",
+  },
+  {
+    label: "Interview",
+    match: (pathname: string) => pathname === "/interview",
+  },
+  {
+    label: "Report",
+    match: (pathname: string) => pathname === "/report",
+  },
+] as const;
+
+function isWorkspacePath(pathname: string) {
+  return pathname !== "/";
+}
+
+export function WorkspaceShell({ children }: WorkspaceShellProps) {
+  const pathname = usePathname() ?? "/";
+  const currentStep =
+    WORKFLOW_STEPS.find((step) => step.match(pathname))?.label ?? "Workspace";
+
+  if (!isWorkspacePath(pathname)) {
+    return <>{children}</>;
+  }
+
+  return (
+    <div className="min-h-screen bg-zinc-100/80 lg:grid lg:grid-cols-[280px_minmax(0,1fr)]">
+      <aside className="hidden border-r border-zinc-200 bg-white lg:flex lg:min-h-screen lg:flex-col">
+        <div className="border-b border-zinc-100 px-6 py-6">
+          <p className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-400">
+            Workspace
+          </p>
+          <h2 className="mt-3 text-xl font-semibold text-zinc-900">
+            Frontend Interview Copilot
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-zinc-600">
+            第一阶段先统一工作区导航，帮助主链路稳定迁移到新的页面结构。
+          </p>
+        </div>
+
+        <nav className="flex flex-1 flex-col gap-2 px-4 py-4">
+          {NAV_ITEMS.map((item) => {
+            const isActive = item.match(pathname);
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`rounded-2xl border px-4 py-3 transition-colors ${
+                  isActive
+                    ? "border-zinc-900 bg-zinc-900 text-white"
+                    : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
+                }`}
+              >
+                <p className="text-sm font-medium">{item.label}</p>
+                <p
+                  className={`mt-1 text-xs leading-5 ${
+                    isActive ? "text-zinc-300" : "text-zinc-500"
+                  }`}
+                >
+                  {item.description}
+                </p>
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="border-t border-zinc-100 px-6 py-6">
+          <p className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-400">
+            Current Step
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {WORKFLOW_STEPS.map((step) => {
+              const isActive = step.label === currentStep;
+
+              return (
+                <span
+                  key={step.label}
+                  className={`rounded-full px-3 py-1 text-xs font-medium ${
+                    isActive
+                      ? "bg-zinc-900 text-white"
+                      : "bg-zinc-100 text-zinc-500"
+                  }`}
+                >
+                  {step.label}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      </aside>
+
+      <div className="min-w-0">
+        <header className="sticky top-0 z-20 border-b border-zinc-200 bg-white/95 px-4 py-4 backdrop-blur lg:hidden">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-[0.16em] text-zinc-400">
+                Workspace
+              </p>
+              <p className="mt-1 text-sm font-medium text-zinc-900">{currentStep}</p>
+            </div>
+            <nav className="flex items-center gap-2 overflow-x-auto">
+              {NAV_ITEMS.map((item) => {
+                const isActive = item.match(pathname);
+
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`whitespace-nowrap rounded-full px-3 py-2 text-sm font-medium ${
+                      isActive
+                        ? "bg-zinc-900 text-white"
+                        : "border border-zinc-200 bg-white text-zinc-600"
+                    }`}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </nav>
+          </div>
+        </header>
+
+        {children}
+      </div>
+    </div>
+  );
+}
