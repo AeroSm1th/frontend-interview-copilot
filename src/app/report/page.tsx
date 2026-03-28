@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { MOCK_INTERVIEW_QUESTIONS } from "@/lib/mock";
 import { getReusableResumeContext } from "@/lib/resume-context";
 import {
+  appendInterviewHistory,
   clearInterviewSession,
   clearInterviewReport,
   clearSetupForm,
@@ -35,6 +36,13 @@ function getGenerateReportErrorMessage(value: unknown) {
   }
 
   return "生成报告失败，请稍后重试。";
+}
+
+function createHistoryItemId() {
+  return (
+    globalThis.crypto?.randomUUID?.() ??
+    `history-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  );
 }
 
 export default function ReportPage() {
@@ -84,6 +92,10 @@ export default function ReportPage() {
         resume: setupForm.resume,
         jd: setupForm.jd,
       });
+      const currentQuestions =
+        interviewSession.questions.length > 0
+          ? interviewSession.questions
+          : MOCK_INTERVIEW_QUESTIONS;
 
       const response = await fetch("/api/generate-report", {
         method: "POST",
@@ -93,10 +105,7 @@ export default function ReportPage() {
         body: JSON.stringify({
           jd: setupForm.jd,
           resume: setupForm.resume,
-          questions:
-            interviewSession.questions.length > 0
-              ? interviewSession.questions
-              : MOCK_INTERVIEW_QUESTIONS,
+          questions: currentQuestions,
           answers: interviewSession.answers,
           analysis: reusableAnalysis,
           jdMatch: reusableJdMatch,
@@ -113,6 +122,20 @@ export default function ReportPage() {
       const nextReport = result as InterviewReport;
       setReport(nextReport);
       saveInterviewReport(nextReport);
+
+      try {
+        appendInterviewHistory({
+          id: createHistoryItemId(),
+          createdAt: new Date().toISOString(),
+          setup: {
+            jd: setupForm.jd,
+            resume: setupForm.resume,
+          },
+          questions: currentQuestions,
+          answers: interviewSession.answers,
+          report: nextReport,
+        });
+      } catch {}
     } catch (error) {
       setReportError(
         error instanceof Error ? error.message : "生成报告失败，请稍后重试。",
@@ -298,6 +321,12 @@ export default function ReportPage() {
         </section>
 
         <section className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+          <Link
+            href="/history"
+            className="inline-flex items-center justify-center rounded-xl border border-zinc-200 px-5 py-3 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50"
+          >
+            查看历史记录
+          </Link>
           <button
             type="button"
             onClick={() => {

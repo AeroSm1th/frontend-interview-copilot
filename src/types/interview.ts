@@ -35,3 +35,12 @@ export type InterviewReport = {
   suggestions: string[];
   summary: string;
 };
+
+export type InterviewHistoryItem = {
+  id: string;
+  createdAt: string;
+  setup: SetupFormData;
+  questions: InterviewQuestion[];
+  answers: InterviewAnswer[];
+  report: InterviewReport;
+};

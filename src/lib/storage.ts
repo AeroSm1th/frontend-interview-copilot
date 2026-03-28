@@ -1,4 +1,5 @@
 import {
+  INTERVIEW_HISTORY_MAX_ITEMS,
   INTERVIEW_SESSION_INITIAL_VALUES,
   SETUP_FORM_INITIAL_VALUES,
   STORAGE_KEYS,
@@ -13,6 +14,7 @@ import type {
 } from "@/types/resume";
 import type {
   InterviewAnswer,
+  InterviewHistoryItem,
   InterviewQuestion,
   InterviewReport,
   InterviewSession,
@@ -96,6 +98,29 @@ function isInterviewReport(value: unknown): value is InterviewReport {
     Array.isArray(data.suggestions) &&
     data.suggestions.every((item) => typeof item === "string")
   );
+}
+
+function isInterviewHistoryItem(value: unknown): value is InterviewHistoryItem {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const data = value as Record<string, unknown>;
+
+  return (
+    typeof data.id === "string" &&
+    typeof data.createdAt === "string" &&
+    isSetupFormData(data.setup) &&
+    Array.isArray(data.questions) &&
+    data.questions.every(isInterviewQuestion) &&
+    Array.isArray(data.answers) &&
+    data.answers.every(isInterviewAnswer) &&
+    isInterviewReport(data.report)
+  );
+}
+
+function isInterviewHistory(value: unknown): value is InterviewHistoryItem[] {
+  return Array.isArray(value) && value.every(isInterviewHistoryItem);
 }
 
 function isResumeAnalysis(value: unknown): value is ResumeAnalysis {
@@ -386,6 +411,83 @@ export function clearInterviewReport() {
   }
 
   window.localStorage.removeItem(STORAGE_KEYS.interviewReport);
+}
+
+export function readInterviewHistory(): InterviewHistoryItem[] {
+  if (!isBrowser()) {
+    return [];
+  }
+
+  const rawValue = window.localStorage.getItem(STORAGE_KEYS.interviewHistory);
+
+  if (!rawValue) {
+    return [];
+  }
+
+  try {
+    const parsedValue: unknown = JSON.parse(rawValue);
+
+    if (isInterviewHistory(parsedValue)) {
+      return parsedValue;
+    }
+  } catch {
+    return [];
+  }
+
+  return [];
+}
+
+function saveInterviewHistory(values: InterviewHistoryItem[]) {
+  if (!isBrowser()) {
+    return;
+  }
+
+  if (values.length === 0) {
+    window.localStorage.removeItem(STORAGE_KEYS.interviewHistory);
+    return;
+  }
+
+  window.localStorage.setItem(
+    STORAGE_KEYS.interviewHistory,
+    JSON.stringify(values),
+  );
+}
+
+export function appendInterviewHistory(value: InterviewHistoryItem) {
+  if (!isBrowser()) {
+    return;
+  }
+
+  try {
+    const nextHistory = [value, ...readInterviewHistory().filter((item) => item.id !== value.id)]
+      .slice(0, INTERVIEW_HISTORY_MAX_ITEMS);
+
+    saveInterviewHistory(nextHistory);
+  } catch {
+    return;
+  }
+}
+
+export function deleteInterviewHistoryItem(id: string) {
+  if (!isBrowser()) {
+    return;
+  }
+
+  try {
+    const nextHistory = readInterviewHistory().filter((item) => item.id !== id);
+
+    saveInterviewHistory(nextHistory);
+  } catch {
+    return;
+  }
+}
+
+export function clearInterviewHistory() {
+  if (!isBrowser()) {
+    return;
+  }
+
+  window.localStorage.removeItem(STORAGE_KEYS.interviewHistory);
 }
 
 export function readResumeDraft(): string {
