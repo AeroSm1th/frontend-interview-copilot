@@ -131,7 +131,7 @@ export function AnalysisChatController({
   const workspaceSidebarSlot = useWorkspaceSidebarSlot();
   const sidebarContainer = workspaceSidebarSlot?.sidebarContainer ?? null;
   const isSidebarAvailable = workspaceSidebarSlot?.isSidebarAvailable ?? false;
-  const setSidebarActive = workspaceSidebarSlot?.setSidebarActive;
+  const setSidebarState = workspaceSidebarSlot?.setSidebarState;
   const [chatMessages, setChatMessages] = useState<ResumeChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatError, setChatError] = useState("");
@@ -194,16 +194,32 @@ export function AnalysisChatController({
   }, [onChattingChange]);
 
   useEffect(() => {
-    if (!setSidebarActive || !isSidebarAvailable) {
+    if (!setSidebarState || !isSidebarAvailable) {
       return;
     }
 
-    setSidebarActive(shouldShowChatPanel);
+    if (!shouldShowChatPanel) {
+      setSidebarState("hidden");
+      return;
+    }
+
+    setSidebarState(isChatSidebarCollapsed ? "collapsed" : "expanded");
+  }, [
+    isChatSidebarCollapsed,
+    isSidebarAvailable,
+    setSidebarState,
+    shouldShowChatPanel,
+  ]);
+
+  useEffect(() => {
+    if (!setSidebarState) {
+      return;
+    }
 
     return () => {
-      setSidebarActive(false);
+      setSidebarState("hidden");
     };
-  }, [isSidebarAvailable, setSidebarActive, shouldShowChatPanel]);
+  }, [setSidebarState]);
 
   function handleChatInputChange(value: string) {
     setChatInput(value);

@@ -423,7 +423,7 @@ export function AnalysisWorkspace() {
 
   if (!isHydrated) {
     return (
-      <PageContainer className="flex items-center">
+      <PageContainer className="flex items-center lg:min-h-full">
         <section className="mx-auto flex w-full max-w-3xl flex-col gap-6 rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
           <PageHeader
             title="正在读取分析工作台"
@@ -439,7 +439,7 @@ export function AnalysisWorkspace() {
 
   if (!hasValidResumeDraft) {
     return (
-      <PageContainer className="flex items-center">
+      <PageContainer className="flex items-center lg:min-h-full">
         <section className="mx-auto flex w-full max-w-3xl flex-col gap-6 rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
           <PageHeader
             title={hasResumeDraft ? "当前简历草稿还不完整" : "还没有可分析的简历草稿"}
@@ -480,7 +480,7 @@ export function AnalysisWorkspace() {
   }
 
   return (
-    <PageContainer className="justify-center">
+    <PageContainer className="justify-center lg:min-h-full">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-8">
         <PageHeader
           title="分析工作台"

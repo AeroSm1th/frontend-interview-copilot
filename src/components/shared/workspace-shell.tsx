@@ -17,7 +17,7 @@ type WorkspaceShellProps = {
 type WorkspaceSidebarSlotContextValue = {
   sidebarContainer: HTMLDivElement | null;
   isSidebarAvailable: boolean;
-  setSidebarActive: (value: boolean) => void;
+  setSidebarState: (value: "hidden" | "collapsed" | "expanded") => void;
 };
 
 const WorkspaceSidebarSlotContext =
@@ -82,21 +82,32 @@ export function WorkspaceShell({ children }: WorkspaceShellProps) {
   const currentStep =
     WORKFLOW_STEPS.find((step) => step.match(pathname))?.label ?? "Workspace";
   const isAnalysisPath = pathname === "/analysis";
-  const [isSidebarActive, setIsSidebarActive] = useState(false);
+  const [sidebarState, setSidebarState] = useState<"hidden" | "collapsed" | "expanded">(
+    "hidden",
+  );
   const [sidebarContainer, setSidebarContainer] = useState<HTMLDivElement | null>(null);
 
   const sidebarContextValue = useMemo(
     () => ({
       sidebarContainer,
       isSidebarAvailable: isAnalysisPath,
-      setSidebarActive: setIsSidebarActive,
+      setSidebarState,
     }),
     [isAnalysisPath, sidebarContainer],
   );
-  const shouldRenderSidebar = isAnalysisPath && isSidebarActive;
-  const shellClassName = shouldRenderSidebar
-    ? "min-h-screen bg-zinc-100/80 lg:grid lg:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)_minmax(320px,380px)]"
-    : "min-h-screen bg-zinc-100/80 lg:grid lg:grid-cols-[280px_minmax(0,1fr)]";
+  const shouldRenderSidebar = isAnalysisPath && sidebarState !== "hidden";
+  const desktopSidebarColumns =
+    sidebarState === "expanded"
+      ? "xl:grid-cols-[280px_minmax(0,1fr)_minmax(320px,380px)]"
+      : sidebarState === "collapsed"
+        ? "xl:grid-cols-[280px_minmax(0,1fr)_104px]"
+        : "";
+  const shellClassName = [
+    "min-h-screen bg-zinc-100/80 lg:grid lg:h-screen lg:overflow-hidden lg:grid-cols-[280px_minmax(0,1fr)]",
+    desktopSidebarColumns,
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   if (!isWorkspacePath(pathname)) {
     return <>{children}</>;
@@ -105,7 +116,7 @@ export function WorkspaceShell({ children }: WorkspaceShellProps) {
   return (
     <WorkspaceSidebarSlotContext.Provider value={sidebarContextValue}>
       <div className={shellClassName}>
-        <aside className="hidden border-r border-zinc-200 bg-white lg:flex lg:min-h-screen lg:flex-col">
+        <aside className="hidden border-r border-zinc-200 bg-white lg:flex lg:h-screen lg:min-h-0 lg:flex-col lg:overflow-hidden">
           <div className="border-b border-zinc-100 px-6 py-6">
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-400">
               Workspace
@@ -118,7 +129,7 @@ export function WorkspaceShell({ children }: WorkspaceShellProps) {
             </p>
           </div>
 
-          <nav className="flex flex-1 flex-col gap-2 px-4 py-4">
+          <nav className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-4 py-4">
             {NAV_ITEMS.map((item) => {
               const isActive = item.match(pathname);
 
@@ -170,7 +181,7 @@ export function WorkspaceShell({ children }: WorkspaceShellProps) {
           </div>
         </aside>
 
-        <div className="min-w-0">
+        <div className="min-w-0 lg:flex lg:h-screen lg:min-h-0 lg:flex-col lg:overflow-hidden">
           <header className="sticky top-0 z-20 border-b border-zinc-200 bg-white/95 px-4 py-4 backdrop-blur lg:hidden">
             <div className="flex items-center justify-between gap-4">
               <div>
@@ -201,16 +212,19 @@ export function WorkspaceShell({ children }: WorkspaceShellProps) {
             </div>
           </header>
 
-          {children}
+          <div className="min-w-0 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+            {children}
+          </div>
         </div>
 
         {shouldRenderSidebar ? (
-          <aside className="hidden border-l border-zinc-200 bg-white xl:flex xl:min-h-screen xl:flex-col">
-            <div className="flex-1 px-6 py-8">
-              <div
-                ref={setSidebarContainer}
-                className="sticky top-8 h-[calc(100vh-4rem)] min-h-[560px]"
-              />
+          <aside className="hidden border-l border-zinc-200 bg-white xl:flex xl:h-screen xl:min-h-0 xl:flex-col xl:overflow-hidden">
+            <div
+              className={`min-h-0 flex-1 ${
+                sidebarState === "collapsed" ? "px-3 py-6" : "p-6"
+              }`}
+            >
+              <div ref={setSidebarContainer} className="h-full min-h-0" />
             </div>
           </aside>
         ) : null}

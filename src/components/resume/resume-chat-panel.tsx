@@ -73,28 +73,26 @@ export function ResumeChatPanel({
 
   if (isCollapsed) {
     return (
-      <section className="flex h-full min-h-[560px] flex-col overflow-hidden rounded-[32px] border border-zinc-200 bg-white shadow-sm">
+      <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-[28px] border border-zinc-200 bg-white shadow-sm">
         <button
           type="button"
           onClick={onToggleCollapse}
-          className="flex h-full flex-col justify-between gap-6 px-4 py-5 text-left transition-colors hover:bg-zinc-50"
+          className="flex h-full w-full flex-col items-center justify-between gap-6 px-3 py-5 text-center transition-colors hover:bg-zinc-50"
         >
-          <div className="space-y-2">
+          <div className="space-y-3">
             <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-zinc-400">
               Chat
             </p>
-            <h2 className="text-base font-semibold text-zinc-900">简历聊天</h2>
-            <p className="text-sm leading-6 text-zinc-500">
-              展开后可以继续追问项目亮点、风险点和面试表达。
-            </p>
+            <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-3 py-4">
+              <p className="text-lg font-semibold text-zinc-900">{messages.length}</p>
+              <p className="mt-1 text-[11px] leading-5 text-zinc-500">消息</p>
+            </div>
           </div>
 
           <div className="space-y-3">
-            <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-3 py-3 text-sm text-zinc-600">
-              当前消息 {messages.length} 条
-            </div>
+            <p className="text-xs leading-5 text-zinc-500">展开后继续追问与润色表达</p>
             <span className="inline-flex items-center justify-center rounded-xl bg-zinc-900 px-3 py-2 text-sm font-medium text-white">
-              打开聊天
+              展开
             </span>
           </div>
         </button>
