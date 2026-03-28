@@ -18,13 +18,13 @@ const NAV_ITEMS = [
   {
     href: "/resume",
     label: "简历",
-    description: "输入或导入简历",
+    description: "输入简历与 JD",
     match: (pathname: string) => pathname === "/resume",
   },
   {
     href: "/analysis",
     label: "分析",
-    description: "分析、JD、聊天、开始面试",
+    description: "分析、匹配、聊天、开始面试",
     match: (pathname: string) => pathname === "/analysis" || pathname === "/setup",
   },
   {
@@ -78,7 +78,7 @@ export function WorkspaceShell({ children }: WorkspaceShellProps) {
             Frontend Interview Copilot
           </h2>
           <p className="mt-2 text-sm leading-6 text-zinc-600">
-            第一阶段先统一工作区导航，帮助主链路稳定迁移到新的页面结构。
+            当前工作区围绕 Resume、Analysis、Interview、Report 四步主链路组织。
           </p>
         </div>
 

@@ -7,6 +7,7 @@ import { PageContainer } from "@/components/shared/page-container";
 import { PageHeader } from "@/components/shared/page-header";
 import { RESUME_UPLOAD_LIMITS } from "@/lib/constants";
 import {
+  getJdValidationMessage,
   getResumeFileReadErrorMessage,
   getResumeFileValidationMessage,
   getResumeValidationMessage,
@@ -15,25 +16,37 @@ import {
   clearResumeAnalysis,
   clearResumeChatMessages,
   clearResumeDraft,
+  clearResumeJdDraft,
   clearResumeJdMatch,
   readResumeDraft,
+  readResumeJdDraft,
   saveResumeDraft,
+  saveResumeJdDraft,
 } from "@/lib/storage";
 
 export default function ResumePage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [resumeText, setResumeText] = useState("");
+  const [jdText, setJdText] = useState("");
   const [uploadError, setUploadError] = useState("");
   const [lastImportedFileName, setLastImportedFileName] = useState("");
   const [isHydrated, setIsHydrated] = useState(false);
 
-  const validationMessage = getResumeValidationMessage(resumeText);
-  const shouldShowValidationError = Boolean(validationMessage) && resumeText.trim().length > 0;
+  const resumeValidationMessage = getResumeValidationMessage(resumeText);
+  const jdValidationMessage = getJdValidationMessage(jdText);
+  const shouldShowResumeValidationError =
+    Boolean(resumeValidationMessage) && resumeText.trim().length > 0;
+  const shouldShowJdValidationError =
+    Boolean(jdValidationMessage) && jdText.trim().length > 0;
   const hasResumeDraft = resumeText.trim().length > 0;
+  const hasValidResumeDraft = hasResumeDraft && !resumeValidationMessage;
+  const hasValidJdDraft = jdText.trim().length === 0 || !jdValidationMessage;
+  const canContinueToAnalysis = hasValidResumeDraft && hasValidJdDraft;
 
   useEffect(() => {
     setResumeText(readResumeDraft());
+    setJdText(readResumeJdDraft());
     setIsHydrated(true);
   }, []);
 
@@ -50,6 +63,17 @@ export default function ResumePage() {
     if (hasResumeChanged) {
       clearResumeAnalysis();
       clearResumeChatMessages();
+      clearResumeJdMatch();
+    }
+  }
+
+  function handleJdChange(value: string) {
+    const hasJdChanged = value !== jdText;
+
+    setJdText(value);
+    saveResumeJdDraft(value);
+
+    if (hasJdChanged) {
       clearResumeJdMatch();
     }
   }
@@ -94,9 +118,11 @@ export default function ResumePage() {
 
   function handleClear() {
     setResumeText("");
+    setJdText("");
     setUploadError("");
     setLastImportedFileName("");
     clearResumeDraft();
+    clearResumeJdDraft();
     clearResumeAnalysis();
     clearResumeChatMessages();
     clearResumeJdMatch();
@@ -110,8 +136,8 @@ export default function ResumePage() {
     <PageContainer className="justify-center">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-8">
         <PageHeader
-          title="简历输入页"
-          description="新的第一步只负责准备简历草稿。你可以直接粘贴文本或导入 .md 文件，内容会自动保存到当前浏览器中，然后进入 /analysis 继续做分析、JD 匹配和简历聊天。"
+          title="准备简历与岗位信息"
+          description="这一页只负责整理进入分析工作台前的 source material。你可以输入或导入简历草稿，补充目标岗位 JD，然后进入 /analysis 做分析、JD 匹配、聊天和模拟面试准备。"
         />
 
         <section className="rounded-[32px] border border-zinc-200 bg-white p-6 shadow-sm sm:p-7">
@@ -170,33 +196,63 @@ export default function ResumePage() {
                 value={resumeText}
                 onChange={(event) => applyResumeText(event.target.value)}
                 placeholder="请粘贴你的简历文本，建议包含项目经历、技术栈、负责内容和结果。"
-                aria-invalid={shouldShowValidationError}
+                aria-invalid={shouldShowResumeValidationError}
                 className={`min-h-80 w-full rounded-2xl border px-4 py-3 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 ${
-                  shouldShowValidationError
+                  shouldShowResumeValidationError
                     ? "border-red-300 bg-red-50/60"
                     : "border-zinc-200 bg-zinc-50"
                 }`}
               />
 
-              {shouldShowValidationError ? (
-                <p className="text-sm text-red-600">{validationMessage}</p>
+              {shouldShowResumeValidationError ? (
+                <p className="text-sm text-red-600">{resumeValidationMessage}</p>
               ) : (
                 <p className="text-sm text-zinc-500">
-                  简历草稿会自动保存在当前浏览器中。进入分析页后，会继续复用这份草稿以及相关缓存。
+                  简历草稿会自动保存在当前浏览器中。更新简历后，已有的分析结果、JD 匹配结果和聊天记录会继续按现有逻辑失效并等待重新生成。
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-3 border-t border-zinc-100 pt-2">
+              <div className="flex items-center justify-between gap-4">
+                <label htmlFor="resume-jd-content" className="text-sm font-medium text-zinc-800">
+                  目标岗位 JD
+                </label>
+                <span className="text-xs text-zinc-500">{jdText.length} 字</span>
+              </div>
+
+              <textarea
+                id="resume-jd-content"
+                value={jdText}
+                onChange={(event) => handleJdChange(event.target.value)}
+                placeholder="建议补充一个目标岗位 JD。进入 /analysis 后会基于这份 JD 做匹配分析，并在开始模拟面试时继续复用。"
+                aria-invalid={shouldShowJdValidationError}
+                className={`min-h-56 w-full rounded-2xl border px-4 py-3 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 ${
+                  shouldShowJdValidationError
+                    ? "border-red-300 bg-red-50/60"
+                    : "border-zinc-200 bg-zinc-50"
+                }`}
+              />
+
+              {shouldShowJdValidationError ? (
+                <p className="text-sm text-red-600">{jdValidationMessage}</p>
+              ) : (
+                <p className="text-sm text-zinc-500">
+                  JD 会自动保存到当前浏览器中。你也可以先只准备简历进入 /analysis 做简历分析和聊天，但 JD 匹配与开始模拟面试会依赖这里的内容。
                 </p>
               )}
             </div>
 
             <div className="flex flex-col gap-3 border-t border-zinc-100 pt-2 sm:flex-row sm:items-center sm:justify-between">
               <div className="rounded-2xl bg-zinc-50 px-4 py-3 text-sm leading-6 text-zinc-500">
-                这一页只保留输入与导入职责，分析、JD 匹配、聊天和开始模拟面试都已经迁移到 /analysis。
+                /resume 现在只保留 source material 输入职责。进入 /analysis 后，页面将只负责分析、JD 匹配、聊天和面试准备。
               </div>
 
               <div className="flex flex-col gap-3 sm:flex-row">
                 <button
                   type="button"
                   onClick={handleClear}
-                  disabled={!hasResumeDraft}
+                  disabled={!hasResumeDraft && jdText.trim().length === 0}
                   className="inline-flex items-center justify-center rounded-xl border border-zinc-200 px-5 py-3 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:border-zinc-100 disabled:text-zinc-400"
                 >
                   清空草稿
@@ -204,7 +260,7 @@ export default function ResumePage() {
                 <button
                   type="button"
                   onClick={() => router.push("/analysis")}
-                  disabled={!hasResumeDraft}
+                  disabled={!canContinueToAnalysis}
                   className="inline-flex items-center justify-center rounded-xl bg-zinc-900 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:text-zinc-500"
                 >
                   继续到 /analysis
@@ -217,18 +273,18 @@ export default function ResumePage() {
         <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="space-y-2">
-              <h2 className="text-base font-semibold text-zinc-900">下一步会发生什么</h2>
+              <h2 className="text-base font-semibold text-zinc-900">进入分析工作台后</h2>
               <p className="text-sm leading-7 text-zinc-600">
-                进入 /analysis 后，你可以先做简历分析，再补充目标岗位 JD、查看匹配结果、继续和 AI 聊天，最后直接进入 /interview。
+                /analysis 会读取这里保存的 resumeDraft 和 resumeJdDraft，用来生成简历分析、JD 匹配、简历聊天上下文，并从那里继续进入 /interview。
               </p>
             </div>
             <button
               type="button"
               onClick={() => router.push("/analysis")}
-              disabled={!hasResumeDraft}
+              disabled={!canContinueToAnalysis}
               className="inline-flex items-center justify-center rounded-xl border border-zinc-200 px-5 py-3 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:border-zinc-100 disabled:text-zinc-400"
             >
-              {isHydrated && hasResumeDraft ? "前往分析工作台" : "先输入简历"}
+              {isHydrated && canContinueToAnalysis ? "前往分析工作台" : "先完成输入"}
             </button>
           </div>
         </section>
