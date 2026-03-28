@@ -465,7 +465,7 @@ export function AnalysisWorkspace() {
               href="/resume"
               className="inline-flex items-center justify-center rounded-xl bg-zinc-900 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-zinc-700"
             >
-              返回 /resume 编辑
+              返回编辑
             </Link>
             <Link
               href="/"
@@ -501,7 +501,7 @@ export function AnalysisWorkspace() {
                 href="/resume"
                 className="inline-flex items-center justify-center rounded-xl border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50"
               >
-                返回 /resume 编辑
+                返回编辑
               </Link>
             </div>
 
@@ -550,6 +550,12 @@ export function AnalysisWorkspace() {
                 {submitError}
               </div>
             ) : null}
+
+            {isHydrated && analysis ? (
+              <div className="mt-6 border-t border-zinc-100 pt-6">
+                <ResumeAnalysisResult analysis={analysis} />
+              </div>
+            ) : null}
           </section>
 
           {shouldShowInitialLoadingState ? (
@@ -588,10 +594,6 @@ export function AnalysisWorkspace() {
             </section>
           ) : null}
 
-          {isHydrated && analysis ? (
-            <ResumeAnalysisResult analysis={analysis} />
-          ) : null}
-
           {shouldShowJdMatchPanel ? (
             <ResumeJdMatchPanel
               jdText={jdText}
@@ -623,7 +625,7 @@ export function AnalysisWorkspace() {
                     disabled={isWorkspaceBusy}
                     className="inline-flex items-center justify-center rounded-xl bg-zinc-900 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:text-zinc-500"
                   >
-                    {isGeneratingQuestions ? "正在生成题目..." : "开始模拟面试"}
+                    {isGeneratingQuestions ? "正在生成题目..." : "模拟面试"}
                   </button>
                 ) : (
                   <Link

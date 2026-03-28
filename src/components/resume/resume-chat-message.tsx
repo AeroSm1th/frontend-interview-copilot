@@ -18,11 +18,8 @@ export function ResumeChatMessage({
 
   if (isUser) {
     return (
-      <div className="flex justify-end">
-        <div className="max-w-[85%] rounded-2xl bg-zinc-900 px-4 py-3 text-sm leading-7 text-white shadow-sm">
-          <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.16em] text-white/60">
-            你
-          </p>
+      <div className="flex min-w-0 justify-end">
+        <div className="min-w-0 max-w-[96%] rounded-lg bg-zinc-900 px-3 py-2.5 text-sm leading-7 text-white">
           <p className="whitespace-pre-wrap break-words">{message.content}</p>
         </div>
       </div>
@@ -33,9 +30,9 @@ export function ResumeChatMessage({
     isStreaming && message.content.trim().length === 0;
 
   return (
-    <div className="flex justify-start">
-      <div className="w-full rounded-3xl border border-zinc-200 bg-white px-4 py-4 text-sm text-zinc-700 shadow-sm">
-        <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.16em] text-zinc-400">
+    <div className="flex min-w-0 justify-start">
+      <div className="min-w-0 w-full border-l-2 border-zinc-200 pl-3 pr-1 py-1 text-sm text-zinc-700">
+        <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.16em] text-zinc-400">
           AI
         </p>
 
@@ -45,11 +42,13 @@ export function ResumeChatMessage({
             <span>正在生成回复...</span>
           </div>
         ) : (
-          <div className="resume-chat-markdown space-y-4 break-words text-[15px] leading-7 text-zinc-700">
+          <div className="resume-chat-markdown min-w-0 space-y-4 break-words text-[15px] leading-7 text-zinc-700">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
-                p: ({ children }) => <p className="whitespace-pre-wrap">{children}</p>,
+                p: ({ children }) => (
+                  <p className="whitespace-pre-wrap break-words">{children}</p>
+                ),
                 ul: ({ children }) => (
                   <ul className="list-disc space-y-2 pl-5 marker:text-zinc-400">
                     {children}
@@ -75,21 +74,21 @@ export function ResumeChatMessage({
                   </a>
                 ),
                 blockquote: ({ children }) => (
-                  <blockquote className="border-l-2 border-zinc-200 pl-4 text-zinc-600">
+                  <blockquote className="min-w-0 border-l-2 border-zinc-200 pl-4 text-zinc-600">
                     {children}
                   </blockquote>
                 ),
                 code: ({ children, className }) => {
                   if (className) {
                     return (
-                      <code className="block overflow-x-auto rounded-2xl bg-zinc-900 px-4 py-3 text-sm text-zinc-100">
+                      <code className="block overflow-x-auto rounded-lg bg-zinc-900 px-3 py-3 text-sm text-zinc-100">
                         {children}
                       </code>
                     );
                   }
 
                   return (
-                    <code className="rounded bg-zinc-100 px-1.5 py-0.5 font-medium text-zinc-800">
+                    <code className="break-words rounded bg-zinc-100 px-1.5 py-0.5 font-medium text-zinc-800">
                       {children}
                     </code>
                   );

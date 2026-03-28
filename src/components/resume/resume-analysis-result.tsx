@@ -32,24 +32,24 @@ export function ResumeAnalysisResult({
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+      <div className="rounded-2xl border border-zinc-200 bg-zinc-50/80 p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-3xl space-y-3">
             <h2 className="text-base font-semibold text-zinc-900">整体总结</h2>
             <p className="text-sm leading-7 text-zinc-600">{analysis.summary}</p>
           </div>
 
-          <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-600">
+          <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-600">
             已提炼 {analysis.keywords.length} 个核心关键词
           </div>
         </div>
-      </section>
+      </div>
 
-      <section className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         {sections.map((section) => (
           <article
             key={section.title}
-            className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm"
+            className="rounded-2xl border border-zinc-200 bg-zinc-50/80 p-5"
           >
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-base font-semibold text-zinc-900">
@@ -60,27 +60,29 @@ export function ResumeAnalysisResult({
               </span>
             </div>
 
-            <ul className="mt-4 space-y-3 text-sm leading-7 text-zinc-600">
-              {section.items.map((item) => (
-                <li
-                  key={item}
-                  className={`rounded-2xl px-4 py-3 ${
-                    section.tone === "soft"
-                      ? "border border-zinc-200 bg-zinc-50"
-                      : "bg-zinc-50"
-                  }`}
-                >
-                  {section.title === "关键词" ? (
-                    <span className="text-sm font-medium text-zinc-700">{item}</span>
-                  ) : (
-                    item
-                  )}
-                </li>
-              ))}
-            </ul>
+            {section.title === "关键词" ? (
+              <div className="mt-4 flex flex-wrap gap-2.5">
+                {section.items.map((item) => (
+                  <span
+                    key={item}
+                    className="inline-flex items-center rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700"
+                  >
+                    {item}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <ul className="mt-4 space-y-3 text-sm leading-7 text-zinc-600">
+                {section.items.map((item) => (
+                  <li key={item} className="rounded-2xl bg-white px-4 py-3">
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            )}
           </article>
         ))}
-      </section>
+      </div>
     </div>
   );
 }

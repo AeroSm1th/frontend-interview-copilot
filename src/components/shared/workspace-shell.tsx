@@ -25,12 +25,6 @@ const WorkspaceSidebarSlotContext =
 
 const NAV_ITEMS = [
   {
-    href: "/",
-    label: "首页",
-    description: "产品说明与入口",
-    match: (pathname: string) => pathname === "/",
-  },
-  {
     href: "/resume",
     label: "简历",
     description: "输入简历与 JD",
@@ -41,6 +35,12 @@ const NAV_ITEMS = [
     label: "分析",
     description: "分析、匹配、聊天、开始面试",
     match: (pathname: string) => pathname === "/analysis" || pathname === "/setup",
+  },
+  {
+    href: "/interview",
+    label: "面试",
+    description: "开始模拟面试与答题",
+    match: (pathname: string) => pathname === "/interview",
   },
   {
     href: "/history",
@@ -98,7 +98,7 @@ export function WorkspaceShell({ children }: WorkspaceShellProps) {
   const shouldRenderSidebar = isAnalysisPath && sidebarState !== "hidden";
   const desktopSidebarColumns =
     sidebarState === "expanded"
-      ? "xl:grid-cols-[280px_minmax(0,1fr)_minmax(320px,380px)]"
+      ? "xl:grid-cols-[280px_minmax(0,1fr)_minmax(400px,520px)]"
       : sidebarState === "collapsed"
         ? "xl:grid-cols-[280px_minmax(0,1fr)_104px]"
         : "";
@@ -218,13 +218,16 @@ export function WorkspaceShell({ children }: WorkspaceShellProps) {
         </div>
 
         {shouldRenderSidebar ? (
-          <aside className="hidden border-l border-zinc-200 bg-white xl:flex xl:h-screen xl:min-h-0 xl:flex-col xl:overflow-hidden">
+          <aside className="hidden min-w-0 border-l border-zinc-200 bg-white xl:flex xl:h-screen xl:min-h-0 xl:flex-col xl:overflow-hidden">
             <div
-              className={`min-h-0 flex-1 ${
-                sidebarState === "collapsed" ? "px-3 py-6" : "p-6"
+              className={`flex min-h-0 min-w-0 flex-1 flex-col ${
+                sidebarState === "collapsed" ? "px-3 py-6" : "px-3 py-3"
               }`}
             >
-              <div ref={setSidebarContainer} className="h-full min-h-0" />
+              <div
+                ref={setSidebarContainer}
+                className="flex h-full min-h-0 min-w-0 w-full flex-col"
+              />
             </div>
           </aside>
         ) : null}

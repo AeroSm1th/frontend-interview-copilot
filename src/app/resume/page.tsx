@@ -13,6 +13,8 @@ import {
   getResumeValidationMessage,
 } from "@/lib/resume-input";
 import {
+  clearInterviewSession,
+  clearSetupForm,
   clearResumeAnalysis,
   clearResumeChatMessages,
   clearResumeDraft,
@@ -126,6 +128,8 @@ export default function ResumePage() {
     clearResumeAnalysis();
     clearResumeChatMessages();
     clearResumeJdMatch();
+    clearSetupForm();
+    clearInterviewSession();
 
     if (fileInputRef.current) {
       fileInputRef.current.value = "";

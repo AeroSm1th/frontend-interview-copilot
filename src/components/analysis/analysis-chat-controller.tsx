@@ -229,14 +229,6 @@ export function AnalysisChatController({
     }
   }
 
-  function handleChatShortcutClick(question: string) {
-    setChatInput(question);
-
-    if (chatError) {
-      setChatError("");
-    }
-  }
-
   function handleToggleChatSidebar() {
     setIsChatSidebarCollapsed((currentValue) => !currentValue);
   }
@@ -403,7 +395,6 @@ export function AnalysisChatController({
           streamingMessageId={streamingMessageId}
           onInputChange={handleChatInputChange}
           onSend={() => void handleChatSend()}
-          onShortcutClick={handleChatShortcutClick}
           onToggleCollapse={handleToggleChatSidebar}
         />,
         sidebarContainer,
@@ -444,7 +435,6 @@ export function AnalysisChatController({
               streamingMessageId={streamingMessageId}
               onInputChange={handleChatInputChange}
               onSend={() => void handleChatSend()}
-              onShortcutClick={handleChatShortcutClick}
               onClose={handleCloseChatSheet}
             />
           </div>
