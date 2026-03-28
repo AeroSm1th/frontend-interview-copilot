@@ -4,10 +4,49 @@ import { createOpenAIClient } from "@/lib/openai";
 import { buildGenerateQuestionsPrompts } from "@/lib/prompts";
 import { validateSetupForm } from "@/lib/validation";
 import type { InterviewQuestion, SetupFormData } from "@/types/interview";
+import type { ResumeAnalysis, ResumeJdMatch } from "@/types/resume";
 
 type GenerateQuestionsResponse = {
   questions: InterviewQuestion[];
 };
+
+function isStringArray(value: unknown) {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function isResumeAnalysis(value: unknown): value is ResumeAnalysis {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const data = value as Record<string, unknown>;
+
+  return (
+    typeof data.summary === "string" &&
+    isStringArray(data.strengths) &&
+    isStringArray(data.risks) &&
+    isStringArray(data.suggestedImprovements) &&
+    isStringArray(data.keywords)
+  );
+}
+
+function isResumeJdMatch(value: unknown): value is ResumeJdMatch {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const data = value as Record<string, unknown>;
+
+  return (
+    typeof data.matchScore === "number" &&
+    Number.isFinite(data.matchScore) &&
+    typeof data.summary === "string" &&
+    isStringArray(data.matchedSkills) &&
+    isStringArray(data.missingSkills) &&
+    isStringArray(data.risks) &&
+    isStringArray(data.suggestions)
+  );
+}
 
 function extractJsonText(content: string) {
   const trimmedContent = content.trim();
@@ -64,11 +103,17 @@ function parseQuestionsFromContent(content: string): InterviewQuestion[] {
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as Partial<SetupFormData>;
+    const parsedBody = (await request.json()) as unknown;
+    const body =
+      parsedBody && typeof parsedBody === "object"
+        ? (parsedBody as Record<string, unknown>)
+        : {};
     const formData: SetupFormData = {
-      jd: body.jd ?? "",
-      resume: body.resume ?? "",
+      jd: typeof body.jd === "string" ? body.jd : "",
+      resume: typeof body.resume === "string" ? body.resume : "",
     };
+    const analysis = isResumeAnalysis(body.analysis) ? body.analysis : undefined;
+    const jdMatch = isResumeJdMatch(body.jdMatch) ? body.jdMatch : undefined;
     const validationResult = validateSetupForm(formData);
 
     if (!validationResult.isValid) {
@@ -82,7 +127,11 @@ export async function POST(request: Request) {
     }
 
     const client = createOpenAIClient();
-    const { systemPrompt, userPrompt } = buildGenerateQuestionsPrompts(formData);
+    const { systemPrompt, userPrompt } = buildGenerateQuestionsPrompts({
+      ...formData,
+      analysis,
+      jdMatch,
+    });
     const completion = await client.chat.completions.create({
       model: process.env.AI_MODEL ?? "qwen-turbo",
       response_format: {

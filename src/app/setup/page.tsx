@@ -9,6 +9,10 @@ import { SETUP_FORM_LIMITS } from "@/lib/constants";
 import {
   clearInterviewSession,
   clearInterviewReport,
+  readResumeAnalysis,
+  readResumeDraft,
+  readResumeJdDraft,
+  readResumeJdMatch,
   readSetupForm,
   saveInterviewSession,
   saveSetupForm,
@@ -111,13 +115,31 @@ export default function SetupPage() {
       setIsGeneratingQuestions(true);
       clearInterviewSession();
       clearInterviewReport();
+      const currentResumeDraft = readResumeDraft();
+      const currentResumeAnalysis = readResumeAnalysis();
+      const currentResumeJdDraft = readResumeJdDraft();
+      const currentResumeJdMatch = readResumeJdMatch();
+      const reusableAnalysis =
+        formData.resume === currentResumeDraft && currentResumeAnalysis
+          ? currentResumeAnalysis
+          : undefined;
+      const reusableJdMatch =
+        formData.resume === currentResumeDraft &&
+        formData.jd === currentResumeJdDraft &&
+        currentResumeJdMatch
+          ? currentResumeJdMatch
+          : undefined;
 
       const response = await fetch("/api/generate-questions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          analysis: reusableAnalysis,
+          jdMatch: reusableJdMatch,
+        }),
       });
       const result = (await response.json()) as
         | GenerateQuestionsSuccessResponse

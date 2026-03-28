@@ -1,11 +1,17 @@
 import "server-only";
 
 import type { InterviewAnswer, InterviewQuestion } from "@/types/interview";
-import type { ResumeAnalysis, ResumeChatMessage } from "@/types/resume";
+import type {
+  ResumeAnalysis,
+  ResumeChatMessage,
+  ResumeJdMatch,
+} from "@/types/resume";
 
 type GenerateQuestionsPromptInput = {
   jd: string;
   resume: string;
+  analysis?: ResumeAnalysis | null;
+  jdMatch?: ResumeJdMatch | null;
 };
 
 type GenerateReportPromptInput = {
@@ -35,18 +41,25 @@ type ResumeJdMatchPromptInput = {
 export function buildGenerateQuestionsPrompts({
   jd,
   resume,
+  analysis,
+  jdMatch,
 }: GenerateQuestionsPromptInput) {
+  const analysisText = analysis ? JSON.stringify(analysis, null, 2) : "无";
+  const jdMatchText = jdMatch ? JSON.stringify(jdMatch, null, 2) : "无";
   const systemPrompt = `你是一名负责前端实习生模拟面试的面试官。
 
-你的任务是根据用户提供的岗位 JD 和简历内容，生成 5 道适合前端实习或校招场景的中文面试题。
+你的任务是根据用户提供的当前岗位 JD、当前简历原文，以及可选的结构化辅助摘要，生成 5 道适合前端实习或校招场景的中文面试题。
 
 要求：
-1. 必须参考 JD 和简历内容。
-2. 题目难度偏前端实习/校招，不要过难。
-3. 题目要覆盖基础知识、项目经历、工程实践。
-4. 不要生成重复题目。
-5. 只返回 JSON，不要返回 markdown，不要添加额外解释。
-6. JSON 格式必须严格如下：
+1. 始终以当前岗位 JD 和当前简历原文为主输入。
+2. 如果提供了简历分析结果或 JD 匹配结果，只能把它们当作辅助摘要，不能替代原文。
+3. 如果辅助摘要和当前岗位 JD 或当前简历原文冲突，必须以当前岗位 JD 和当前简历原文为准。
+4. 题目应优先参考候选人的项目亮点、风险点、缺失技能、岗位匹配差距，让题目更有针对性。
+5. 题目难度偏前端实习/校招，不要过难。
+6. 题目要覆盖基础知识、项目经历、工程实践。
+7. 不要生成重复题目。
+8. 只返回 JSON，不要返回 markdown，不要添加额外解释。
+9. JSON 格式必须严格如下：
 {
   "questions": [
     { "id": "q1", "question": "..." },
@@ -59,11 +72,17 @@ export function buildGenerateQuestionsPrompts({
 
   const userPrompt = `请基于下面信息生成面试题。
 
-岗位 JD：
+当前岗位 JD：
 ${jd}
 
-简历内容：
-${resume}`;
+当前简历原文：
+${resume}
+
+可选的简历分析结果：
+${analysisText}
+
+可选的岗位匹配结果：
+${jdMatchText}`;
 
   return {
     systemPrompt,
