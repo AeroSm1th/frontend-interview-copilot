@@ -123,14 +123,19 @@ export function buildGenerateFollowUpPrompts({
 4. 每次最多只生成 1 道追问。
 5. 追问难度应符合前端实习或校招场景，不要过难。
 6. 追问表述要简洁、自然、适合继续口头作答。
-7. 只返回 JSON，不要返回 markdown，不要添加额外解释。
-8. JSON 格式必须严格如下：
+7. 如果生成追问，同时额外给出一句很短的追问提示说明，用于页面展示。
+8. followUpHint 必须是用户可见的简短中文提示，尽量不超过 18 个字，不要解释推理过程。
+9. 如果 followUpQuestion 为 null，则 followUpHint 也必须为 null。
+10. 只返回 JSON，不要返回 markdown，不要添加额外解释。
+11. JSON 格式必须严格如下：
 {
-  "followUpQuestion": null
+  "followUpQuestion": null,
+  "followUpHint": null
 }
 或
 {
-  "followUpQuestion": "..."
+  "followUpQuestion": "...",
+  "followUpHint": "..."
 }`;
 
   const userPrompt = `请基于下面信息判断是否需要生成 1 道追问。

@@ -79,6 +79,15 @@ function isInterviewQuestion(value: unknown): value is InterviewQuestion {
     return false;
   }
 
+  if (
+    "followUpHint" in data &&
+    typeof data.followUpHint !== "undefined" &&
+    data.followUpHint !== null &&
+    typeof data.followUpHint !== "string"
+  ) {
+    return false;
+  }
+
   return true;
 }
 

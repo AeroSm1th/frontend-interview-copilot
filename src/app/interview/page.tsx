@@ -25,6 +25,13 @@ type GenerateFollowUpErrorResponse = {
   message?: string;
 };
 
+type FollowUpUiStatus = "idle" | "checking" | "inserted" | "none" | "failed";
+
+type FollowUpUiState = {
+  status: FollowUpUiStatus;
+  mainQuestionId: string | null;
+};
+
 function isInterviewQuestion(value: unknown): value is InterviewQuestion {
   if (!value || typeof value !== "object") {
     return false;
@@ -60,6 +67,15 @@ function isInterviewQuestion(value: unknown): value is InterviewQuestion {
     data.followUpStatus !== "pending" &&
     data.followUpStatus !== "generated" &&
     data.followUpStatus !== "skipped"
+  ) {
+    return false;
+  }
+
+  if (
+    "followUpHint" in data &&
+    typeof data.followUpHint !== "undefined" &&
+    data.followUpHint !== null &&
+    typeof data.followUpHint !== "string"
   ) {
     return false;
   }
@@ -163,9 +179,26 @@ export default function InterviewPage() {
     };
   });
   const [isGeneratingFollowUp, setIsGeneratingFollowUp] = useState(false);
+  const [followUpUiState, setFollowUpUiState] = useState<FollowUpUiState>({
+    status: "idle",
+    mainQuestionId: null,
+  });
   const questions =
     session.questions.length > 0 ? session.questions : MOCK_INTERVIEW_QUESTIONS;
   const maxQuestionIndex = questions.length - 1;
+  const mainQuestionOrderMap = useMemo(() => {
+    const nextOrderMap = new Map<string, number>();
+    let nextMainQuestionOrder = 0;
+
+    questions.forEach((question) => {
+      if (getQuestionKind(question) === "main") {
+        nextMainQuestionOrder += 1;
+        nextOrderMap.set(question.id, nextMainQuestionOrder);
+      }
+    });
+
+    return nextOrderMap;
+  }, [questions]);
 
   useEffect(() => {
     if (!hasValidSetup) {
@@ -180,6 +213,18 @@ export default function InterviewPage() {
 
   const currentQuestion = questions[session.currentQuestionIndex];
   const currentQuestionKind = getQuestionKind(currentQuestion);
+  const currentMainQuestionOrder =
+    currentQuestionKind === "main"
+      ? mainQuestionOrderMap.get(currentQuestion.id) ?? session.currentQuestionIndex + 1
+      : null;
+  const currentParentMainOrder =
+    currentQuestion.parentQuestionId != null
+      ? mainQuestionOrderMap.get(currentQuestion.parentQuestionId) ?? null
+      : null;
+  const currentFollowUpHint =
+    currentQuestionKind === "follow_up"
+      ? currentQuestion.followUpHint?.trim() ?? ""
+      : "";
   const currentAnswer =
     session.answers.find((item) => item.questionId === currentQuestion.id)?.answer ??
     "";
@@ -198,6 +243,51 @@ export default function InterviewPage() {
       ).length,
     [questions, session.answers],
   );
+  const followUpUiMainQuestionOrder =
+    followUpUiState.mainQuestionId != null
+      ? mainQuestionOrderMap.get(followUpUiState.mainQuestionId) ?? null
+      : null;
+  const followUpUiNotice =
+    followUpUiState.status === "idle"
+      ? null
+      : followUpUiState.status === "checking"
+        ? {
+            title: "正在判断是否追加追问",
+            description: `系统正在根据主问题${
+              followUpUiMainQuestionOrder != null ? ` ${followUpUiMainQuestionOrder}` : ""
+            }的回答决定是否生成 1 道追问，请稍候。`,
+            className:
+              "rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-600",
+          }
+        : followUpUiState.status === "inserted"
+          ? {
+              title: "已追加 1 道追问",
+              description: `这道追问来自主问题${
+                followUpUiMainQuestionOrder != null
+                  ? ` ${followUpUiMainQuestionOrder}`
+                  : ""
+              }，请继续补充刚才回答里的关键细节。`,
+              className:
+                "rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700",
+            }
+          : followUpUiState.status === "none"
+            ? {
+                title: "本题未追加追问",
+                description: `主问题${
+                  followUpUiMainQuestionOrder != null
+                    ? ` ${followUpUiMainQuestionOrder}`
+                    : ""
+                }的回答无需继续深挖，系统已进入下一题。`,
+                className:
+                  "rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-600",
+              }
+            : {
+                title: "追问生成失败，已继续后续流程",
+                description:
+                  "这次没有成功生成追问，但当前回答已经保留，系统不会阻塞后续题目与报告流程。",
+                className:
+                  "rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600",
+              };
 
   function persistSession(nextSession: InterviewSession) {
     setSession(nextSession);
@@ -208,6 +298,13 @@ export default function InterviewPage() {
   }
 
   function handleAnswerChange(value: string) {
+    if (followUpUiState.status !== "checking" && followUpUiState.status !== "idle") {
+      setFollowUpUiState({
+        status: "idle",
+        mainQuestionId: null,
+      });
+    }
+
     setSession((currentSession) => ({
       ...currentSession,
       answers: currentSession.answers.some(
@@ -250,6 +347,10 @@ export default function InterviewPage() {
   }
 
   function goToQuestion(index: number) {
+    setFollowUpUiState({
+      status: "idle",
+      mainQuestionId: null,
+    });
     setSession((currentSession) => ({
       ...currentSession,
       currentQuestionIndex: Math.max(
@@ -261,22 +362,38 @@ export default function InterviewPage() {
 
   async function handleNextStep() {
     if (currentQuestionKind === "follow_up") {
+      setFollowUpUiState({
+        status: "idle",
+        mainQuestionId: null,
+      });
       moveToNextQuestionOrReport(session);
       return;
     }
 
     if (!currentAnswer.trim()) {
+      setFollowUpUiState({
+        status: "idle",
+        mainQuestionId: null,
+      });
       moveToNextQuestionOrReport(session);
       return;
     }
 
     if (getFollowUpStatus(currentQuestion) !== "pending") {
+      setFollowUpUiState({
+        status: "idle",
+        mainQuestionId: null,
+      });
       moveToNextQuestionOrReport(session);
       return;
     }
 
     try {
       setIsGeneratingFollowUp(true);
+      setFollowUpUiState({
+        status: "checking",
+        mainQuestionId: currentQuestion.id,
+      });
       const { reusableAnalysis, reusableJdMatch } = getReusableResumeContext({
         resume: setupForm.resume,
         jd: setupForm.jd,
@@ -309,6 +426,10 @@ export default function InterviewPage() {
       }
 
       if (result.followUpQuestion) {
+        setFollowUpUiState({
+          status: "inserted",
+          mainQuestionId: currentQuestion.id,
+        });
         const nextQuestions = insertFollowUpQuestion(
           session.questions,
           session.currentQuestionIndex,
@@ -323,6 +444,10 @@ export default function InterviewPage() {
         return;
       }
     } catch {
+      setFollowUpUiState({
+        status: "failed",
+        mainQuestionId: currentQuestion.id,
+      });
       const nextQuestions = markMainQuestionFollowUpSkipped(
         session.questions,
         session.currentQuestionIndex,
@@ -337,6 +462,10 @@ export default function InterviewPage() {
       setIsGeneratingFollowUp(false);
     }
 
+    setFollowUpUiState({
+      status: "none",
+      mainQuestionId: currentQuestion.id,
+    });
     const nextQuestions = markMainQuestionFollowUpSkipped(
       session.questions,
       session.currentQuestionIndex,
@@ -401,10 +530,35 @@ export default function InterviewPage() {
           </div>
 
           <div className="mb-4 rounded-2xl bg-zinc-50 p-5">
-            <p className="text-sm font-medium text-zinc-500">题目区域</p>
+            <div className="flex flex-wrap items-center gap-3">
+              {currentQuestionKind === "follow_up" ? (
+                <>
+                  <span className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700">
+                    追问
+                  </span>
+                  <span className="inline-flex rounded-full bg-white px-3 py-1 text-xs font-medium text-zinc-500">
+                    关联主问题 {currentParentMainOrder ?? "未知"}
+                  </span>
+                </>
+              ) : (
+                <span className="inline-flex rounded-full bg-zinc-900 px-3 py-1 text-xs font-medium text-white">
+                  主问题 {currentMainQuestionOrder}
+                </span>
+              )}
+            </div>
             <h2 className="mt-2 text-lg font-semibold text-zinc-900">
               {currentQuestion.question}
             </h2>
+            {currentQuestionKind === "follow_up" ? (
+              <p className="mt-2 text-sm text-zinc-500">
+                这是基于你上一道主问题回答追加的补充追问。
+              </p>
+            ) : null}
+            {currentFollowUpHint ? (
+              <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                追问提示：{currentFollowUpHint}
+              </div>
+            ) : null}
           </div>
 
           <div className="flex items-center justify-between gap-4 rounded-2xl border border-zinc-100 px-4 py-3">
@@ -420,13 +574,20 @@ export default function InterviewPage() {
           </div>
         </section>
 
+        {followUpUiNotice ? (
+          <section className={followUpUiNotice.className}>
+            <p className="font-medium">{followUpUiNotice.title}</p>
+            <p className="mt-1">{followUpUiNotice.description}</p>
+          </section>
+        ) : null}
+
         <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
           <div className="space-y-3">
             <label
               htmlFor="answer-content"
               className="text-sm font-medium text-zinc-800"
             >
-              你的回答
+              {currentQuestionKind === "follow_up" ? "你的补充回答" : "你的回答"}
             </label>
             <textarea
               id="answer-content"
@@ -437,11 +598,13 @@ export default function InterviewPage() {
               className="min-h-56 w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 disabled:cursor-not-allowed disabled:bg-zinc-100"
             />
             <p className="text-sm text-zinc-500">
-              当前允许留空切换题目，答案会自动保存在本地浏览器中。
+              {currentQuestionKind === "follow_up"
+                ? "请围绕上一道主问题继续补充细节；答案会自动保存在本地浏览器中。"
+                : "当前允许留空切换题目，答案会自动保存在本地浏览器中。"}
             </p>
             {isGeneratingFollowUp ? (
               <p className="text-sm text-zinc-500">
-                正在根据当前主问题回答判断是否需要追加追问...
+                正在根据当前主问题回答判断是否需要追加追问，期间会暂时锁定输入与切题操作...
               </p>
             ) : null}
           </div>

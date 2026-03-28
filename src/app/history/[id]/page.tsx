@@ -110,6 +110,9 @@ export default function HistoryDetailPage() {
   }
 
   const answeredCount = getAnsweredCount(historyItem.answers);
+  const followUpCount = historyItem.questions.filter(
+    (question) => getQuestionKind(question) === "follow_up",
+  ).length;
   const mainQuestionOrderMap = new Map<string, number>();
   let nextMainQuestionOrder = 0;
 
@@ -163,6 +166,11 @@ export default function HistoryDetailPage() {
                 </span>
                 <span className="text-sm text-zinc-500">
                   已回答 {answeredCount} / {historyItem.questions.length} 题
+                </span>
+                <span className="text-sm text-zinc-500">
+                  {followUpCount > 0
+                    ? `包含 ${followUpCount} 道追问`
+                    : "本轮未触发追问"}
                 </span>
               </div>
             </div>
@@ -227,7 +235,7 @@ export default function HistoryDetailPage() {
             <div>
               <h2 className="text-base font-semibold text-zinc-900">题目与回答</h2>
               <p className="mt-1 text-sm text-zinc-500">
-                问答明细按历史快照中的题目顺序展示，并通过 questionId 匹配对应回答。
+                问答明细按历史快照中的原始顺序展示，并标注主问题与追问的对应关系。
               </p>
             </div>
             <span className="text-sm text-zinc-500">
@@ -252,17 +260,30 @@ export default function HistoryDetailPage() {
                   question.id,
                 );
                 const answerText = matchedAnswer?.answer.trim() || "暂无回答";
+                const followUpHint =
+                  questionKind === "follow_up"
+                    ? question.followUpHint?.trim() ?? ""
+                    : "";
 
                 return (
                   <article
                     key={question.id}
-                    className="rounded-2xl border border-zinc-100 bg-zinc-50/70 p-5"
+                    className={
+                      questionKind === "follow_up"
+                        ? "ml-4 rounded-2xl border border-amber-200 bg-amber-50/70 p-5"
+                        : "rounded-2xl border border-zinc-100 bg-zinc-50/70 p-5"
+                    }
                   >
                     <div className="flex flex-wrap items-center gap-3">
                       {questionKind === "follow_up" ? (
-                        <span className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700">
-                          追问
-                        </span>
+                        <>
+                          <span className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700">
+                            追问
+                          </span>
+                          <span className="inline-flex rounded-full bg-white px-3 py-1 text-xs font-medium text-zinc-500">
+                            关联主问题 {parentMainOrder ?? question.parentQuestionId ?? "未知"}
+                          </span>
+                        </>
                       ) : (
                         <span className="inline-flex rounded-full bg-white px-3 py-1 text-xs font-medium text-zinc-500">
                           主问题 {mainQuestionOrder}
@@ -271,12 +292,13 @@ export default function HistoryDetailPage() {
                       <span className="text-xs text-zinc-400">
                         questionId: {question.id}
                       </span>
-                      {questionKind === "follow_up" ? (
-                        <span className="text-xs text-zinc-400">
-                          关联主问题 {parentMainOrder ?? question.parentQuestionId ?? "未知"}
-                        </span>
-                      ) : null}
                     </div>
+
+                    {followUpHint ? (
+                      <div className="mt-3 rounded-2xl border border-amber-200 bg-white/80 px-4 py-3 text-sm text-amber-700">
+                        追问提示：{followUpHint}
+                      </div>
+                    ) : null}
 
                     <div className="mt-4">
                       <p className="text-sm font-medium text-zinc-900">问题</p>

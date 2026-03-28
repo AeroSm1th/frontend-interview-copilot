@@ -4,6 +4,7 @@ export type InterviewQuestion = {
   kind?: "main" | "follow_up";
   parentQuestionId?: string | null;
   followUpStatus?: "pending" | "generated" | "skipped";
+  followUpHint?: string | null;
 };
 
 export type SetupFormData = {

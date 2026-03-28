@@ -59,6 +59,7 @@ export default function ReportPage() {
   const followUpCount = currentQuestions.filter(
     (question) => question.kind === "follow_up",
   ).length;
+  const hasFollowUp = followUpCount > 0;
   const answeredCount = interviewSession.answers.filter((item) =>
     Boolean(item.answer.trim()),
   ).length;
@@ -278,7 +279,7 @@ export default function ReportPage() {
                 <p className="mt-1 text-lg font-semibold text-zinc-900">
                   {answeredCount} / {questionCount}
                 </p>
-                {followUpCount > 0 ? (
+                {hasFollowUp ? (
                   <p className="mt-1 text-xs text-zinc-500">
                     含 {followUpCount} 道追问
                   </p>
@@ -291,9 +292,14 @@ export default function ReportPage() {
                 </p>
               </div>
               <div className="rounded-2xl bg-zinc-50 px-4 py-3">
-                <p className="text-xs text-zinc-500">当前进度</p>
+                <p className="text-xs text-zinc-500">追问情况</p>
                 <p className="mt-1 text-lg font-semibold text-zinc-900">
-                  第 {interviewSession.currentQuestionIndex + 1} 题
+                  {hasFollowUp ? `包含 ${followUpCount} 道` : "未触发追问"}
+                </p>
+                <p className="mt-1 text-xs text-zinc-500">
+                  {hasFollowUp
+                    ? "报告已合并评估主问题与追问表现"
+                    : "本轮按主问题回答进行评估"}
                 </p>
               </div>
             </div>

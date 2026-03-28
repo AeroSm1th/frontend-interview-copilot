@@ -18,6 +18,11 @@ type GenerateFollowUpResponse = {
   followUpQuestion: InterviewQuestion | null;
 };
 
+type ParsedFollowUpContent = {
+  followUpQuestion: string | null;
+  followUpHint: string | null;
+};
+
 function isStringArray(value: unknown) {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
@@ -77,7 +82,17 @@ function createFollowUpQuestionId(mainQuestionId: string) {
   return `${mainQuestionId}-follow-up`;
 }
 
-function parseFollowUpQuestionText(content: string): string | null {
+function normalizeOptionalHint(value: unknown) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalizedValue = value.trim();
+
+  return normalizedValue.length > 0 ? normalizedValue : null;
+}
+
+function parseFollowUpContent(content: string): ParsedFollowUpContent {
   const jsonText = extractJsonText(content);
 
   if (!jsonText) {
@@ -97,7 +112,10 @@ function parseFollowUpQuestionText(content: string): string | null {
   }
 
   if (data.followUpQuestion === null) {
-    return null;
+    return {
+      followUpQuestion: null,
+      followUpHint: null,
+    };
   }
 
   if (typeof data.followUpQuestion !== "string") {
@@ -106,7 +124,15 @@ function parseFollowUpQuestionText(content: string): string | null {
 
   const followUpQuestion = data.followUpQuestion.trim();
 
-  return followUpQuestion.length > 0 ? followUpQuestion : null;
+  const normalizedFollowUpQuestion =
+    followUpQuestion.length > 0 ? followUpQuestion : null;
+
+  return {
+    followUpQuestion: normalizedFollowUpQuestion,
+    followUpHint: normalizedFollowUpQuestion
+      ? normalizeOptionalHint(data.followUpHint)
+      : null,
+  };
 }
 
 function validateGenerateFollowUpInput(body: Partial<GenerateFollowUpRequestBody>) {
@@ -215,14 +241,15 @@ export async function POST(request: Request) {
       );
     }
 
-    const followUpQuestionText = parseFollowUpQuestionText(content);
+    const { followUpQuestion, followUpHint } = parseFollowUpContent(content);
     const responseBody: GenerateFollowUpResponse = {
-      followUpQuestion: followUpQuestionText
+      followUpQuestion: followUpQuestion
         ? {
             id: createFollowUpQuestionId(validationResult.mainQuestionId),
-            question: followUpQuestionText,
+            question: followUpQuestion,
             kind: "follow_up",
             parentQuestionId: validationResult.mainQuestionId,
+            followUpHint,
           }
         : null,
     };
