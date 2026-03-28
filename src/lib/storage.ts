@@ -5,8 +5,11 @@ import {
 } from "@/lib/constants";
 import type {
   ResumeAnalysis,
+  ResumeAnalysisCache,
   ResumeChatMessage,
   ResumeJdMatch,
+  ResumeJdMatchCache,
+  SourceSignature,
 } from "@/types/resume";
 import type {
   InterviewAnswer,
@@ -115,6 +118,37 @@ function isResumeAnalysis(value: unknown): value is ResumeAnalysis {
   );
 }
 
+function isSourceSignature(value: unknown): value is SourceSignature {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const data = value as Record<string, unknown>;
+
+  return (
+    data.version === 1 &&
+    typeof data.normalizedLength === "number" &&
+    Number.isInteger(data.normalizedLength) &&
+    data.normalizedLength >= 0 &&
+    typeof data.checksum === "number" &&
+    Number.isInteger(data.checksum) &&
+    data.checksum >= 0
+  );
+}
+
+function isResumeAnalysisCache(value: unknown): value is ResumeAnalysisCache {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const data = value as Record<string, unknown>;
+
+  return (
+    isResumeAnalysis(data.result) &&
+    (data.sourceSignature === null || isSourceSignature(data.sourceSignature))
+  );
+}
+
 function isResumeJdMatch(value: unknown): value is ResumeJdMatch {
   if (!value || typeof value !== "object") {
     return false;
@@ -133,6 +167,33 @@ function isResumeJdMatch(value: unknown): value is ResumeJdMatch {
     data.risks.every((item) => typeof item === "string") &&
     Array.isArray(data.suggestions) &&
     data.suggestions.every((item) => typeof item === "string")
+  );
+}
+
+function isResumeJdMatchCache(value: unknown): value is ResumeJdMatchCache {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const data = value as Record<string, unknown>;
+
+  if (!isResumeJdMatch(data.result)) {
+    return false;
+  }
+
+  if (data.sourceSignature === null) {
+    return true;
+  }
+
+  if (!data.sourceSignature || typeof data.sourceSignature !== "object") {
+    return false;
+  }
+
+  const sourceSignature = data.sourceSignature as Record<string, unknown>;
+
+  return (
+    isSourceSignature(sourceSignature.resume) &&
+    isSourceSignature(sourceSignature.jd)
   );
 }
 
@@ -353,7 +414,7 @@ export function clearResumeDraft() {
   window.localStorage.removeItem(STORAGE_KEYS.resumeDraft);
 }
 
-export function readResumeAnalysis(): ResumeAnalysis | null {
+export function readResumeAnalysisCache(): ResumeAnalysisCache | null {
   if (!isBrowser()) {
     return null;
   }
@@ -367,8 +428,27 @@ export function readResumeAnalysis(): ResumeAnalysis | null {
   try {
     const parsedValue: unknown = JSON.parse(rawValue);
 
-    if (isResumeAnalysis(parsedValue)) {
+    if (isResumeAnalysisCache(parsedValue)) {
       return parsedValue;
+    }
+
+    if (
+      parsedValue &&
+      typeof parsedValue === "object" &&
+      "result" in parsedValue &&
+      isResumeAnalysis(parsedValue.result)
+    ) {
+      return {
+        result: parsedValue.result,
+        sourceSignature: null,
+      };
+    }
+
+    if (isResumeAnalysis(parsedValue)) {
+      return {
+        result: parsedValue,
+        sourceSignature: null,
+      };
     }
   } catch {
     return null;
@@ -377,7 +457,11 @@ export function readResumeAnalysis(): ResumeAnalysis | null {
   return null;
 }
 
-export function saveResumeAnalysis(values: ResumeAnalysis) {
+export function readResumeAnalysis(): ResumeAnalysis | null {
+  return readResumeAnalysisCache()?.result ?? null;
+}
+
+export function saveResumeAnalysisCache(values: ResumeAnalysisCache) {
   if (!isBrowser()) {
     return;
   }
@@ -386,6 +470,13 @@ export function saveResumeAnalysis(values: ResumeAnalysis) {
     STORAGE_KEYS.resumeAnalysis,
     JSON.stringify(values),
   );
+}
+
+export function saveResumeAnalysis(values: ResumeAnalysis) {
+  saveResumeAnalysisCache({
+    result: values,
+    sourceSignature: null,
+  });
 }
 
 export function clearResumeAnalysis() {
@@ -462,7 +553,7 @@ export function clearResumeJdDraft() {
   window.localStorage.removeItem(STORAGE_KEYS.resumeJdDraft);
 }
 
-export function readResumeJdMatch(): ResumeJdMatch | null {
+export function readResumeJdMatchCache(): ResumeJdMatchCache | null {
   if (!isBrowser()) {
     return null;
   }
@@ -476,8 +567,27 @@ export function readResumeJdMatch(): ResumeJdMatch | null {
   try {
     const parsedValue: unknown = JSON.parse(rawValue);
 
-    if (isResumeJdMatch(parsedValue)) {
+    if (isResumeJdMatchCache(parsedValue)) {
       return parsedValue;
+    }
+
+    if (
+      parsedValue &&
+      typeof parsedValue === "object" &&
+      "result" in parsedValue &&
+      isResumeJdMatch(parsedValue.result)
+    ) {
+      return {
+        result: parsedValue.result,
+        sourceSignature: null,
+      };
+    }
+
+    if (isResumeJdMatch(parsedValue)) {
+      return {
+        result: parsedValue,
+        sourceSignature: null,
+      };
     }
   } catch {
     return null;
@@ -486,12 +596,23 @@ export function readResumeJdMatch(): ResumeJdMatch | null {
   return null;
 }
 
-export function saveResumeJdMatch(value: ResumeJdMatch) {
+export function readResumeJdMatch(): ResumeJdMatch | null {
+  return readResumeJdMatchCache()?.result ?? null;
+}
+
+export function saveResumeJdMatchCache(value: ResumeJdMatchCache) {
   if (!isBrowser()) {
     return;
   }
 
   window.localStorage.setItem(STORAGE_KEYS.resumeJdMatch, JSON.stringify(value));
+}
+
+export function saveResumeJdMatch(value: ResumeJdMatch) {
+  saveResumeJdMatchCache({
+    result: value,
+    sourceSignature: null,
+  });
 }
 
 export function clearResumeJdMatch() {

@@ -9,6 +9,7 @@ import { ResumeJdMatchPanel } from "@/components/resume/resume-jd-match-panel";
 import { PageContainer } from "@/components/shared/page-container";
 import { PageHeader } from "@/components/shared/page-header";
 import { RESUME_UPLOAD_LIMITS, SETUP_FORM_LIMITS } from "@/lib/constants";
+import { createSourceSignature } from "@/lib/source-signature";
 import {
   clearResumeAnalysis,
   clearResumeChatMessages,
@@ -21,11 +22,11 @@ import {
   readResumeJdDraft,
   readResumeJdMatch,
   readSetupForm,
-  saveResumeAnalysis,
+  saveResumeAnalysisCache,
   saveResumeChatMessages,
   saveResumeDraft,
   saveResumeJdDraft,
-  saveResumeJdMatch,
+  saveResumeJdMatchCache,
   saveSetupForm,
 } from "@/lib/storage";
 import type {
@@ -422,7 +423,10 @@ export default function ResumePage() {
 
       setAnalysis(result);
       saveResumeDraft(resumeText);
-      saveResumeAnalysis(result);
+      saveResumeAnalysisCache({
+        result,
+        sourceSignature: createSourceSignature(resumeText),
+      });
       clearResumeChatState();
     } catch (error) {
       setSubmitError(
@@ -569,7 +573,13 @@ export default function ResumePage() {
 
       setJdMatch(result);
       saveResumeJdDraft(jdText);
-      saveResumeJdMatch(result);
+      saveResumeJdMatchCache({
+        result,
+        sourceSignature: {
+          resume: createSourceSignature(resumeText),
+          jd: createSourceSignature(jdText),
+        },
+      });
     } catch (error) {
       setJdMatchError(
         error instanceof Error ? error.message : "JD 匹配分析失败，请稍后重试。",

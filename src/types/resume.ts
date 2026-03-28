@@ -6,6 +6,17 @@ export type ResumeAnalysis = {
   keywords: string[];
 };
 
+export type SourceSignature = {
+  version: 1;
+  normalizedLength: number;
+  checksum: number;
+};
+
+export type ResumeAnalysisCache = {
+  result: ResumeAnalysis;
+  sourceSignature: SourceSignature | null;
+};
+
 export type ResumeJdMatch = {
   matchScore: number;
   summary: string;
@@ -13,6 +24,16 @@ export type ResumeJdMatch = {
   missingSkills: string[];
   risks: string[];
   suggestions: string[];
+};
+
+export type ResumeJdMatchCache = {
+  result: ResumeJdMatch;
+  sourceSignature:
+    | {
+        resume: SourceSignature;
+        jd: SourceSignature;
+      }
+    | null;
 };
 
 export type ResumeChatRole = "user" | "assistant";
