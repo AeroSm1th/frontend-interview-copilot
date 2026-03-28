@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { InterviewAnswer, InterviewQuestion } from "@/types/interview";
+import type { ResumeAnalysis, ResumeChatMessage } from "@/types/resume";
 
 type GenerateQuestionsPromptInput = {
   jd: string;
@@ -16,6 +17,13 @@ type GenerateReportPromptInput = {
 
 type AnalyzeResumePromptInput = {
   resume: string;
+};
+
+type ResumeChatPromptInput = {
+  resume: string;
+  analysis: ResumeAnalysis;
+  question: string;
+  messages?: ResumeChatMessage[];
 };
 
 export function buildGenerateQuestionsPrompts({
@@ -129,6 +137,54 @@ export function buildAnalyzeResumePrompts({
 
 简历文本：
 ${resume}`;
+
+  return {
+    systemPrompt,
+    userPrompt,
+  };
+}
+
+export function buildResumeChatPrompts({
+  resume,
+  analysis,
+  question,
+  messages = [],
+}: ResumeChatPromptInput) {
+  const recentMessages = messages.slice(-6);
+  const recentMessagesText =
+    recentMessages.length > 0
+      ? recentMessages
+          .map((message) =>
+            `${message.role === "user" ? "用户" : "助手"}：${message.content}`,
+          )
+          .join("\n\n")
+      : "无";
+
+  const systemPrompt = `你是一名前端实习生和校招生求职场景下的简历问答助手。
+
+你的任务是基于用户提供的简历文本、已有简历分析结果和当前问题，给出简洁、具体、可执行的中文回答。
+
+要求：
+1. 回答视角必须以“前端实习/校招岗位”为准。
+2. 回答必须优先参考简历文本和已有分析结果，不要脱离上下文。
+3. 不要编造简历中没有的信息；如果信息不足，要明确说明。
+4. 语气要自然、直接，尽量给出能立刻使用的表达建议或修改建议。
+5. 不要输出大段 Markdown 标题，不要添加无关寒暄。
+6. 如果用户询问项目亮点、自我介绍、风险点、追问准备等，请尽量结合简历内容给出示例表达。`;
+
+  const userPrompt = `请基于下面信息回答用户问题。
+
+简历文本：
+${resume}
+
+已有简历分析结果：
+${JSON.stringify(analysis, null, 2)}
+
+最近对话：
+${recentMessagesText}
+
+当前问题：
+${question}`;
 
   return {
     systemPrompt,

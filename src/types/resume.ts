@@ -5,3 +5,12 @@ export type ResumeAnalysis = {
   suggestedImprovements: string[];
   keywords: string[];
 };
+
+export type ResumeChatRole = "user" | "assistant";
+
+export type ResumeChatMessage = {
+  id: string;
+  role: ResumeChatRole;
+  content: string;
+  createdAt: string;
+};

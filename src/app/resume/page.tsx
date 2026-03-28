@@ -3,20 +3,32 @@
 import { type ChangeEvent, type FormEvent, useEffect, useRef, useState } from "react";
 
 import { ResumeAnalysisResult } from "@/components/resume/resume-analysis-result";
+import { ResumeChatPanel } from "@/components/resume/resume-chat-panel";
 import { PageContainer } from "@/components/shared/page-container";
 import { PageHeader } from "@/components/shared/page-header";
 import { RESUME_UPLOAD_LIMITS, SETUP_FORM_LIMITS } from "@/lib/constants";
 import {
   clearResumeAnalysis,
+  clearResumeChatMessages,
   clearResumeDraft,
   readResumeAnalysis,
+  readResumeChatMessages,
   readResumeDraft,
   saveResumeAnalysis,
+  saveResumeChatMessages,
   saveResumeDraft,
 } from "@/lib/storage";
-import type { ResumeAnalysis } from "@/types/resume";
+import type { ResumeAnalysis, ResumeChatMessage } from "@/types/resume";
 
 type AnalyzeResumeErrorResponse = {
+  message?: string;
+};
+
+type ResumeChatSuccessResponse = {
+  reply: string;
+};
+
+type ResumeChatErrorResponse = {
   message?: string;
 };
 
@@ -103,6 +115,41 @@ function getAnalyzeResumeErrorMessage(value: unknown) {
   return "简历分析失败，请稍后重试。";
 }
 
+function isResumeChatSuccessResponse(value: unknown): value is ResumeChatSuccessResponse {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  return "reply" in value && typeof value.reply === "string";
+}
+
+function getResumeChatErrorMessage(value: unknown) {
+  if (
+    value &&
+    typeof value === "object" &&
+    "message" in value &&
+    typeof value.message === "string"
+  ) {
+    return value.message;
+  }
+
+  return "简历对话失败，请稍后重试。";
+}
+
+function createResumeChatMessage(
+  role: ResumeChatMessage["role"],
+  content: string,
+): ResumeChatMessage {
+  const fallbackId = `${role}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  return {
+    id: globalThis.crypto?.randomUUID?.() ?? fallbackId,
+    role,
+    content,
+    createdAt: new Date().toISOString(),
+  };
+}
+
 export default function ResumePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [resumeText, setResumeText] = useState("");
@@ -112,26 +159,48 @@ export default function ResumePage() {
   const [submitError, setSubmitError] = useState("");
   const [uploadError, setUploadError] = useState("");
   const [lastImportedFileName, setLastImportedFileName] = useState("");
+  const [chatMessages, setChatMessages] = useState<ResumeChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatError, setChatError] = useState("");
+  const [isChatting, setIsChatting] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
 
   const validationMessage = getResumeValidationMessage(resumeText);
   const shouldShowValidationError =
     Boolean(validationMessage) && (hasSubmitted || resumeText.trim().length > 0);
+  const canUseChat = Boolean(analysis) && resumeText.trim().length > 0;
+  const isResumeFormBusy = isAnalyzing || isChatting;
   const shouldShowInitialLoadingState = isHydrated && isAnalyzing && !analysis;
   const shouldShowRefreshingState = isHydrated && isAnalyzing && Boolean(analysis);
   const shouldShowSubmitFailureState =
     isHydrated && !isAnalyzing && !analysis && Boolean(submitError);
   const shouldShowEmptyState =
     isHydrated && !isAnalyzing && !analysis && !submitError;
+  const shouldShowChatPanel = isHydrated && canUseChat;
 
   useEffect(() => {
     const nextResumeText = readResumeDraft();
     const nextAnalysis = readResumeAnalysis();
+    const nextChatMessages = readResumeChatMessages();
 
     setResumeText(nextResumeText);
     setAnalysis(nextAnalysis);
+
+    if (nextResumeText.trim().length > 0 && nextAnalysis) {
+      setChatMessages(nextChatMessages);
+    } else {
+      clearResumeChatMessages();
+    }
+
     setIsHydrated(true);
   }, []);
+
+  function clearResumeChatState() {
+    setChatMessages([]);
+    setChatInput("");
+    setChatError("");
+    clearResumeChatMessages();
+  }
 
   function applyResumeText(value: string) {
     const hasResumeChanged = value !== resumeText;
@@ -147,9 +216,16 @@ export default function ResumePage() {
       setUploadError("");
     }
 
-    if (analysis && hasResumeChanged) {
+    if (chatError) {
+      setChatError("");
+    }
+
+    if (hasResumeChanged && analysis) {
+      clearResumeChatState();
       setAnalysis(null);
       clearResumeAnalysis();
+    } else if (hasResumeChanged && chatMessages.length > 0) {
+      clearResumeChatState();
     }
   }
 
@@ -231,6 +307,7 @@ export default function ResumePage() {
       setAnalysis(result);
       saveResumeDraft(resumeText);
       saveResumeAnalysis(result);
+      clearResumeChatState();
     } catch (error) {
       setSubmitError(
         error instanceof Error ? error.message : "简历分析失败，请稍后重试。",
@@ -249,9 +326,84 @@ export default function ResumePage() {
     setHasSubmitted(false);
     clearResumeDraft();
     clearResumeAnalysis();
+    clearResumeChatState();
 
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
+    }
+  }
+
+  function handleChatInputChange(value: string) {
+    setChatInput(value);
+
+    if (chatError) {
+      setChatError("");
+    }
+  }
+
+  function handleChatShortcutClick(question: string) {
+    setChatInput(question);
+
+    if (chatError) {
+      setChatError("");
+    }
+  }
+
+  async function handleChatSend() {
+    const question = chatInput.trim();
+
+    if (!question) {
+      return;
+    }
+
+    if (!analysis || resumeText.trim().length === 0) {
+      setChatError("请先提供简历内容并完成简历分析。");
+      return;
+    }
+
+    try {
+      setIsChatting(true);
+      setChatError("");
+
+      const response = await fetch("/api/resume-chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          resume: resumeText,
+          analysis,
+          messages: chatMessages,
+          question,
+        }),
+      });
+      const result = (await response.json()) as
+        | ResumeChatSuccessResponse
+        | ResumeChatErrorResponse;
+
+      if (!response.ok) {
+        throw new Error(getResumeChatErrorMessage(result));
+      }
+
+      if (!isResumeChatSuccessResponse(result) || result.reply.trim().length === 0) {
+        throw new Error("AI 没有返回有效回复，请稍后重试。");
+      }
+
+      const nextMessages = [
+        ...chatMessages,
+        createResumeChatMessage("user", question),
+        createResumeChatMessage("assistant", result.reply.trim()),
+      ];
+
+      setChatMessages(nextMessages);
+      saveResumeChatMessages(nextMessages);
+      setChatInput("");
+    } catch (error) {
+      setChatError(
+        error instanceof Error ? error.message : "简历对话失败，请稍后重试。",
+      );
+    } finally {
+      setIsChatting(false);
     }
   }
 
@@ -298,14 +450,14 @@ export default function ResumePage() {
                       type="file"
                       accept=".md,text/markdown"
                       onChange={handleFileImport}
-                      disabled={isAnalyzing}
+                      disabled={isResumeFormBusy}
                       className="sr-only"
                       tabIndex={-1}
                     />
                     <button
                       type="button"
                       onClick={handleOpenFilePicker}
-                      disabled={isAnalyzing}
+                      disabled={isResumeFormBusy}
                       className="inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 disabled:cursor-not-allowed disabled:border-zinc-100 disabled:bg-zinc-50 disabled:text-zinc-400"
                     >
                       选择 .md 文件
@@ -328,7 +480,7 @@ export default function ResumePage() {
                 onChange={(event) => handleResumeChange(event.target.value)}
                 placeholder="请粘贴你的简历文本，建议包含项目经历、技术栈、负责内容和结果。"
                 aria-invalid={shouldShowValidationError}
-                disabled={isAnalyzing}
+                disabled={isResumeFormBusy}
                 className={`min-h-72 w-full rounded-2xl border px-4 py-3 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 ${
                   shouldShowValidationError
                     ? "border-red-300 bg-red-50/60"
@@ -355,14 +507,14 @@ export default function ResumePage() {
               <button
                 type="button"
                 onClick={handleClear}
-                disabled={isAnalyzing}
+                disabled={isResumeFormBusy}
                 className="inline-flex items-center justify-center rounded-xl border border-zinc-200 px-5 py-3 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:border-zinc-100 disabled:text-zinc-400"
               >
                 清空内容
               </button>
               <button
                 type="submit"
-                disabled={Boolean(validationMessage) || isAnalyzing}
+                disabled={Boolean(validationMessage) || isResumeFormBusy}
                 className="inline-flex items-center justify-center rounded-xl bg-zinc-900 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:text-zinc-500"
               >
                 {isAnalyzing
@@ -413,6 +565,19 @@ export default function ResumePage() {
 
         {isHydrated && analysis ? (
           <ResumeAnalysisResult analysis={analysis} />
+        ) : null}
+
+        {shouldShowChatPanel ? (
+          <ResumeChatPanel
+            messages={chatMessages}
+            inputValue={chatInput}
+            errorMessage={chatError}
+            isSending={isChatting}
+            disabled={isAnalyzing}
+            onInputChange={handleChatInputChange}
+            onSend={handleChatSend}
+            onShortcutClick={handleChatShortcutClick}
+          />
         ) : null}
       </div>
     </PageContainer>

@@ -3,7 +3,7 @@ import {
   SETUP_FORM_INITIAL_VALUES,
   STORAGE_KEYS,
 } from "@/lib/constants";
-import type { ResumeAnalysis } from "@/types/resume";
+import type { ResumeAnalysis, ResumeChatMessage } from "@/types/resume";
 import type {
   InterviewAnswer,
   InterviewQuestion,
@@ -109,6 +109,25 @@ function isResumeAnalysis(value: unknown): value is ResumeAnalysis {
     Array.isArray(data.keywords) &&
     data.keywords.every((item) => typeof item === "string")
   );
+}
+
+function isResumeChatMessage(value: unknown): value is ResumeChatMessage {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const data = value as Record<string, unknown>;
+
+  return (
+    typeof data.id === "string" &&
+    (data.role === "user" || data.role === "assistant") &&
+    typeof data.content === "string" &&
+    typeof data.createdAt === "string"
+  );
+}
+
+function isResumeChatMessages(value: unknown): value is ResumeChatMessage[] {
+  return Array.isArray(value) && value.every(isResumeChatMessage);
 }
 
 function normalizeLegacyInterviewSession(value: unknown): InterviewSession | null {
@@ -350,4 +369,44 @@ export function clearResumeAnalysis() {
   }
 
   window.localStorage.removeItem(STORAGE_KEYS.resumeAnalysis);
+}
+
+export function readResumeChatMessages(): ResumeChatMessage[] {
+  if (!isBrowser()) {
+    return [];
+  }
+
+  const rawValue = window.localStorage.getItem(STORAGE_KEYS.resumeChat);
+
+  if (!rawValue) {
+    return [];
+  }
+
+  try {
+    const parsedValue: unknown = JSON.parse(rawValue);
+
+    if (isResumeChatMessages(parsedValue)) {
+      return parsedValue;
+    }
+  } catch {
+    return [];
+  }
+
+  return [];
+}
+
+export function saveResumeChatMessages(values: ResumeChatMessage[]) {
+  if (!isBrowser()) {
+    return;
+  }
+
+  window.localStorage.setItem(STORAGE_KEYS.resumeChat, JSON.stringify(values));
+}
+
+export function clearResumeChatMessages() {
+  if (!isBrowser()) {
+    return;
+  }
+
+  window.localStorage.removeItem(STORAGE_KEYS.resumeChat);
 }
