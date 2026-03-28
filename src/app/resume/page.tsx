@@ -1,6 +1,7 @@
 "use client";
 
 import { type ChangeEvent, type FormEvent, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { ResumeAnalysisResult } from "@/components/resume/resume-analysis-result";
 import { ResumeChatPanel } from "@/components/resume/resume-chat-panel";
@@ -19,11 +20,13 @@ import {
   readResumeDraft,
   readResumeJdDraft,
   readResumeJdMatch,
+  readSetupForm,
   saveResumeAnalysis,
   saveResumeChatMessages,
   saveResumeDraft,
   saveResumeJdDraft,
   saveResumeJdMatch,
+  saveSetupForm,
 } from "@/lib/storage";
 import type {
   ResumeAnalysis,
@@ -211,6 +214,7 @@ function createResumeChatMessage(
 }
 
 export default function ResumePage() {
+  const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [resumeText, setResumeText] = useState("");
   const [analysis, setAnalysis] = useState<ResumeAnalysis | null>(null);
@@ -248,6 +252,7 @@ export default function ResumePage() {
     isHydrated && !isAnalyzing && !analysis && !submitError;
   const shouldShowJdMatchPanel = isHydrated && canUseJdMatch;
   const shouldShowChatPanel = isHydrated && canUseChat;
+  const canBringToSetup = resumeText.trim().length > 0;
 
   useEffect(() => {
     const nextResumeText = readResumeDraft();
@@ -574,6 +579,25 @@ export default function ResumePage() {
     }
   }
 
+  function handleBringToSetup() {
+    const trimmedResumeText = resumeText.trim();
+
+    if (!trimmedResumeText) {
+      return;
+    }
+
+    const currentSetupForm = readSetupForm();
+    const trimmedJdText = jdText.trim();
+    const nextSetupForm = {
+      ...currentSetupForm,
+      resume: resumeText,
+      jd: trimmedJdText ? jdText : currentSetupForm.jd,
+    };
+
+    saveSetupForm(nextSetupForm);
+    router.push("/setup");
+  }
+
   return (
     <PageContainer>
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
@@ -678,6 +702,14 @@ export default function ResumePage() {
                 className="inline-flex items-center justify-center rounded-xl border border-zinc-200 px-5 py-3 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:border-zinc-100 disabled:text-zinc-400"
               >
                 清空内容
+              </button>
+              <button
+                type="button"
+                onClick={handleBringToSetup}
+                disabled={!canBringToSetup}
+                className="inline-flex items-center justify-center rounded-xl border border-zinc-200 px-5 py-3 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:border-zinc-100 disabled:text-zinc-400"
+              >
+                带入到模拟面试
               </button>
               <button
                 type="submit"
