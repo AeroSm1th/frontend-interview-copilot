@@ -42,16 +42,19 @@
 ### `/interview`
 - 承接分析阶段准备好的题目与上下文
 - 负责逐题作答
+- 负责在主问题下推进最多 3 轮连续动态追问
 - 保存当前问答进度
 
 ### `/report`
 - 读取当前问答结果
 - 生成 AI 复盘报告
+- 结合主问题与追问链进行评估
 - 成功后写入本地历史记录
 
 ### `/history` 与 `/history/[id]`
 - 展示已完成练习的本地历史快照
 - 历史详情页查看报告、题目、回答、JD 与简历快照
+- 题目与回答按线性顺序保留主问题及其后续追问链
 - 不与当前进行中的会话状态混用
 
 ### `/setup`
@@ -67,6 +70,7 @@
 
 设计约束：
 - `WorkspaceShell` 是全局壳层，但 sidebar slot 只在 `/analysis` 可用
+- `/setup` 在导航步骤上归入 Analysis，但不会作为正式输入页对外描述
 - 其他页面仍处于同一个工作区导航中，但不会渲染聊天侧边栏
 
 ## 5. 聊天侧边栏设计
@@ -102,6 +106,7 @@
 职责边界：
 - `setupForm` 是流程兼容状态，不是新的正式输入来源
 - `interviewSession` 只表示当前正在进行或刚完成的一轮问答
+- 动态追问链仍然保存在同一个 `interviewSession` 中，不单独拆分树结构
 
 ### 6.4 报告与历史阶段
 - `interviewReport`：当前会话对应的复盘报告缓存
@@ -112,19 +117,63 @@
 - `interviewHistory` 用于沉淀已经生成成功的本地历史记录
 - 历史详情读取的是快照，不依赖当前活跃会话
 
-## 7. 状态流概览
+## 7. 动态追问链设计
+
+### 7.1 单一事实来源
+- 当前问答数据仍以 `questions[] + answers[]` 作为单一事实来源
+- 不引入树结构问答，不单独维护追问树或分支节点
+- 追问链通过在线性 `questions[]` 中按实际发生顺序插入题目来表达
+
+### 7.2 InterviewQuestion 轻量扩展
+`InterviewQuestion` 在当前实现中通过轻量字段扩展来表达主问题与追问链：
+- `kind`：标记当前题是 `main` 还是 `follow_up`
+- `parentQuestionId`：始终指向所属主问题 id，不指向上一跳追问
+- `followUpRound`：仅 `follow_up` 使用，表示第几轮追问，当前只允许 `1 | 2 | 3`
+- `followUpStatus`：表示当前题后续是否已经决定继续生成下一轮追问
+- `followUpHint`：用于界面展示的简短追问提示
+
+约束：
+- 主问题不填写 `followUpRound`
+- `InterviewAnswer` 结构不变，仍然只保存 `questionId + answer`
+
+### 7.3 generate-follow-up 接口
+- `/api/generate-follow-up` 当前基于“当前主问题链”工作，而不是只看单次主问题回答
+- 接口输入会带上 `mainQuestionId`、当前题信息、当前轮次以及 `questionChain`
+- `questionChain` 只包含当前主问题及其已经发生的追问链，不包含整轮面试历史
+- 接口输出仍保持 `followUpQuestion: InterviewQuestion | null`
+- 当当前轮次已达到第 3 轮时，接口直接返回 `null`
+
+### 7.4 /interview 推进规则
+当前问答推进遵循统一规则：
+- 主问题回答后，可决定是否进入追问 1
+- 追问 1 回答后，可决定是否进入追问 2
+- 追问 2 回答后，可决定是否进入追问 3
+- 追问 3 回答后必须停止，并进入下一主问题
+- 0 / 1 / 2 / 3 轮都可能发生
+- 空答案仍允许直接进入下一题
+- 追问生成失败时不会阻塞主流程，会直接继续后续题目与报告链路
+
+### 7.5 /report 与 /history/[id] 兼容方式
+- `/report` 继续直接消费完整的 `questions[] + answers[]`
+- 报告 prompt 会把主问题及其后续 0 到 3 道连续追问视为同一条表现链进行评估
+- `/history/[id]` 继续按原始线性顺序展示题目与回答
+- 历史详情通过 `parentQuestionId` 映射所属主问题，通过 `followUpRound` 展示当前是第几轮追问
+
+## 8. 状态流概览
 1. 用户在 `/resume` 保存 `resumeDraft` 和 `resumeJdDraft`
 2. `/analysis` 读取草稿并生成 `resumeAnalysis`、`resumeJdMatch`、`resumeChat`
 3. 用户在 `/analysis` 开始模拟面试，写入 `setupForm` 和 `interviewSession`
-4. `/interview` 逐题更新 `interviewSession`
+4. `/interview` 逐题更新 `interviewSession`，并按需要在线性 `questions[]` 中插入追问 1 / 2 / 3
 5. `/report` 基于当前上下文生成 `interviewReport`
 6. 报告生成成功后，写入 `interviewHistory`
 
-## 8. 当前能力边界
+## 9. 当前能力边界
 - 支持 `.md` 简历导入，不支持 PDF 上传与解析
 - 支持本地历史查看，不支持云同步
 - 不支持导出报告
 - 不支持多用户与账号系统
+- 不支持无限追问
+- 不支持树结构问答
 - 不提供全局聊天能力
 - 不应把兼容用 `/setup` 描述为正式主流程页面
 - 不应把 mock 或 fallback 逻辑描述为产品主能力
