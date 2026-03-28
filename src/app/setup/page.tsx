@@ -6,17 +6,10 @@ import { useRouter } from "next/navigation";
 import { PageContainer } from "@/components/shared/page-container";
 import { PageHeader } from "@/components/shared/page-header";
 import { SETUP_FORM_LIMITS } from "@/lib/constants";
-import {
-  areSourceSignaturesEqual,
-  createSourceSignature,
-} from "@/lib/source-signature";
+import { getReusableResumeContext } from "@/lib/resume-context";
 import {
   clearInterviewSession,
   clearInterviewReport,
-  readResumeAnalysisCache,
-  readResumeDraft,
-  readResumeJdDraft,
-  readResumeJdMatchCache,
   readSetupForm,
   saveInterviewSession,
   saveSetupForm,
@@ -119,40 +112,10 @@ export default function SetupPage() {
       setIsGeneratingQuestions(true);
       clearInterviewSession();
       clearInterviewReport();
-      const currentResumeSignature = createSourceSignature(formData.resume);
-      const currentJdSignature = createSourceSignature(formData.jd);
-      const currentResumeDraft = readResumeDraft();
-      const currentResumeAnalysisCache = readResumeAnalysisCache();
-      const currentResumeJdDraft = readResumeJdDraft();
-      const currentResumeJdMatchCache = readResumeJdMatchCache();
-      const reusableAnalysis =
-        currentResumeAnalysisCache?.sourceSignature
-          ? areSourceSignaturesEqual(
-              currentResumeAnalysisCache.sourceSignature,
-              currentResumeSignature,
-            )
-            ? currentResumeAnalysisCache.result
-            : undefined
-          : formData.resume === currentResumeDraft && currentResumeAnalysisCache
-            ? currentResumeAnalysisCache.result
-            : undefined;
-      const reusableJdMatch =
-        currentResumeJdMatchCache?.sourceSignature
-          ? areSourceSignaturesEqual(
-              currentResumeJdMatchCache.sourceSignature.resume,
-              currentResumeSignature,
-            ) &&
-            areSourceSignaturesEqual(
-              currentResumeJdMatchCache.sourceSignature.jd,
-              currentJdSignature,
-            )
-            ? currentResumeJdMatchCache.result
-            : undefined
-          : formData.resume === currentResumeDraft &&
-              formData.jd === currentResumeJdDraft &&
-              currentResumeJdMatchCache
-            ? currentResumeJdMatchCache.result
-            : undefined;
+      const { reusableAnalysis, reusableJdMatch } = getReusableResumeContext({
+        resume: formData.resume,
+        jd: formData.jd,
+      });
 
       const response = await fetch("/api/generate-questions", {
         method: "POST",

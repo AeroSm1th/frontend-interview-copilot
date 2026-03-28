@@ -19,6 +19,8 @@ type GenerateReportPromptInput = {
   resume: string;
   questions: InterviewQuestion[];
   answers: InterviewAnswer[];
+  analysis?: ResumeAnalysis | null;
+  jdMatch?: ResumeJdMatch | null;
 };
 
 type AnalyzeResumePromptInput = {
@@ -95,18 +97,30 @@ export function buildGenerateReportPrompts({
   resume,
   questions,
   answers,
+  analysis,
+  jdMatch,
 }: GenerateReportPromptInput) {
+  const analysisText = analysis ? JSON.stringify(analysis, null, 2) : "无";
+  const jdMatchText = jdMatch ? JSON.stringify(jdMatch, null, 2) : "无";
   const systemPrompt = `你是一名负责前端实习生和校招生模拟面试复盘的面试官。
 
-你的任务是根据岗位 JD、简历内容、面试题目和用户回答，输出一份简洁、具体、可执行的中文面试报告。
+你的任务是根据当前岗位 JD、当前简历内容、当前面试题目、当前用户回答，以及可选的结构化辅助摘要，输出一份简洁、具体、可执行的中文面试报告。
 
 要求：
 1. 评估视角以“前端实习/校招面试”为准。
-2. 给出总分、总结、优势、薄弱点、建议。
-3. strengths、weaknesses、suggestions 各至少 2 条。
-4. 结论要具体，尽量结合回答质量、完整度、项目表达和工程实践意识。
-5. 只返回 JSON，不要返回 markdown，不要添加额外解释。
-6. JSON 格式必须严格如下：
+2. 始终以当前岗位 JD、当前简历内容、当前面试题目和当前用户回答为主输入。
+3. 如果提供了简历分析结果或 JD 匹配结果，只能把它们当作辅助摘要，不能替代原文。
+4. 如果辅助摘要和当前岗位 JD、当前简历内容、当前面试题目或当前用户回答冲突，必须以原文为准。
+5. 给出总分、总结、优势、薄弱点、建议。
+6. strengths、weaknesses、suggestions 各至少 2 条。
+7. 报告应尽量关注：
+   - 简历亮点是否在回答中体现
+   - 简历风险点是否在回答中暴露
+   - 与岗位差距相关的薄弱点
+   - 更有针对性的改进建议
+8. 结论要具体，尽量结合回答质量、完整度、项目表达和工程实践意识。
+9. 只返回 JSON，不要返回 markdown，不要添加额外解释。
+10. JSON 格式必须严格如下：
 {
   "score": 0,
   "summary": "...",
@@ -122,6 +136,12 @@ ${jd}
 
 简历内容：
 ${resume}
+
+可选的简历分析结果：
+${analysisText}
+
+可选的岗位匹配结果：
+${jdMatchText}
 
 面试题目：
 ${JSON.stringify(questions, null, 2)}

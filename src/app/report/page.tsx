@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { PageContainer } from "@/components/shared/page-container";
 import { PageHeader } from "@/components/shared/page-header";
 import { MOCK_INTERVIEW_QUESTIONS } from "@/lib/mock";
+import { getReusableResumeContext } from "@/lib/resume-context";
 import {
   clearInterviewSession,
   clearInterviewReport,
@@ -79,6 +80,10 @@ export default function ReportPage() {
     try {
       setIsGeneratingReport(true);
       setReportError("");
+      const { reusableAnalysis, reusableJdMatch } = getReusableResumeContext({
+        resume: setupForm.resume,
+        jd: setupForm.jd,
+      });
 
       const response = await fetch("/api/generate-report", {
         method: "POST",
@@ -93,6 +98,8 @@ export default function ReportPage() {
               ? interviewSession.questions
               : MOCK_INTERVIEW_QUESTIONS,
           answers: interviewSession.answers,
+          analysis: reusableAnalysis,
+          jdMatch: reusableJdMatch,
         }),
       });
       const result = (await response.json()) as

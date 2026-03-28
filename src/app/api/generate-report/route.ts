@@ -9,11 +9,52 @@ import type {
   InterviewReport,
   SetupFormData,
 } from "@/types/interview";
+import type { ResumeAnalysis, ResumeJdMatch } from "@/types/resume";
 
 type GenerateReportRequestBody = SetupFormData & {
   questions: InterviewQuestion[];
   answers: InterviewAnswer[];
+  analysis?: ResumeAnalysis;
+  jdMatch?: ResumeJdMatch;
 };
+
+function isStringArray(value: unknown) {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function isResumeAnalysis(value: unknown): value is ResumeAnalysis {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const data = value as Record<string, unknown>;
+
+  return (
+    typeof data.summary === "string" &&
+    isStringArray(data.strengths) &&
+    isStringArray(data.risks) &&
+    isStringArray(data.suggestedImprovements) &&
+    isStringArray(data.keywords)
+  );
+}
+
+function isResumeJdMatch(value: unknown): value is ResumeJdMatch {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const data = value as Record<string, unknown>;
+
+  return (
+    typeof data.matchScore === "number" &&
+    Number.isFinite(data.matchScore) &&
+    typeof data.summary === "string" &&
+    isStringArray(data.matchedSkills) &&
+    isStringArray(data.missingSkills) &&
+    isStringArray(data.risks) &&
+    isStringArray(data.suggestions)
+  );
+}
 
 function extractJsonText(content: string) {
   const trimmedContent = content.trim();
@@ -122,6 +163,8 @@ function validateGenerateReportInput(body: Partial<GenerateReportRequestBody>) {
     formData,
     questions: body.questions,
     answers: body.answers,
+    analysis: isResumeAnalysis(body.analysis) ? body.analysis : undefined,
+    jdMatch: isResumeJdMatch(body.jdMatch) ? body.jdMatch : undefined,
   };
 }
 
@@ -162,6 +205,8 @@ export async function POST(request: Request) {
       resume: validationResult.formData.resume,
       questions: validationResult.questions,
       answers: validationResult.answers,
+      analysis: validationResult.analysis,
+      jdMatch: validationResult.jdMatch,
     });
     const completion = await client.chat.completions.create({
       model: process.env.AI_MODEL ?? "qwen-turbo",
